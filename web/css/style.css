@@ -1,0 +1,6 @@
+.custom-scrollbar {
+    height: 70px;
+    width: 500px;
+    background: #F5F6F9;
+    overflow-y: scroll;
+}
