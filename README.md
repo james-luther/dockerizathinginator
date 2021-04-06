@@ -25,7 +25,7 @@ The current build is listed under releases. You can also download here:
 
 [Latest Build](https://github.com/b34rdtek/dockerizathinginator/releases/download/ALPHA/dockerizathinginator.exe)
 
----As of this build, core functionality is not setup, nore does the application correctly run---
+---As of this build, core functionality is not setup, nor does the application correctly run---
 
 ### [](#header-3) Contributing
 
