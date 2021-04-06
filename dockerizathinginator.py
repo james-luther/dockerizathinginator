@@ -164,4 +164,4 @@ def install_portainer(host, user, password, vol):
     finally:
         ssh.close()
 
-eel.start('index.html', size=(800, 600))
+eel.start('index.html', size=(800, 600), port=8888)

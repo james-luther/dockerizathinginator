@@ -4,9 +4,9 @@ block_cipher = None
 
 
 a = Analysis(['dockerizathinginator.py'],
-             pathex=['D:\\VSCode Projects\\Python Projects\\dockerizathinginator'],
+             pathex=['/home/b34rd/storage/VSCode Projects/Python Projects/dockerizathinginator'],
              binaries=[],
-             datas=[('D:\\VSCode Projects\\Python Projects\\dockerizathinginator\\lib\\site-packages\\eel\\eel.js', 'eel'), ('web', 'web')],
+             datas=[('/home/b34rd/storage/VSCode Projects/Python Projects/dockerizathinginator/lib/python3.8/site-packages/eel/eel.js', 'eel'), ('web', 'web')],
              hiddenimports=['bottle_websocket'],
              hookspath=[],
              runtime_hooks=[],
@@ -30,4 +30,4 @@ exe = EXE(pyz,
           upx=True,
           upx_exclude=[],
           runtime_tmpdir=None,
-          console=False , icon='web\\favicon.ico')
+          console=False )
