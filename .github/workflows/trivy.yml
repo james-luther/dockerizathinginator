@@ -16,11 +16,21 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-        
-      - uses: knqyf263/trivy-issue-action@v0.0.3
+
+      - name: Run Trivy vulnerability scanner in repo mode
+        uses: aquasecurity/trivy-action@master
         with:
+          scan-type: 'fs'
+          hide-progress: false
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+          format: 'json'
+          output: 'result.json'
+      
+      - uses: b34rd-tek/trivy-report-issue-action@main
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          input-filename: "result.json"
           label: 'vulnerability'
-          severity: 'CRITICAL,HIGH'
-          skip-dirs: ''
           assignee: ''
           project-id: ''
