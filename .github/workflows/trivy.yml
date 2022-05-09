@@ -6,7 +6,7 @@ on:
     - cron: '0 12 * * *'
   push:
     branches:
-      - master
+      - main
   pull_request:
 
 jobs:
@@ -24,13 +24,4 @@ jobs:
           hide-progress: false
           severity: 'HIGH,CRITICAL'
           ignore-unfixed: true
-          format: 'json'
-          output: 'result.json'
-      
-      - uses: b34rd-tek/trivy-report-issue-action@main
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          input-filename: "result.json"
-          label: 'vulnerability'
-          assignee: ''
-          project-id: ''
+          format: 'table'
