@@ -1,5 +1,14 @@
 name: Static Code Analysis
 
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 12 * * *'
+  push:
+    branches:
+      - master
+  pull_request:
+
 jobs:
   build:
     name: Build
