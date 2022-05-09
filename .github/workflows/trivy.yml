@@ -1,0 +1,17 @@
+name: Static Code Analysis
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        
+      - uses: knqyf263/trivy-issue-action@v0.0.3
+        with:
+          label: 'vulnerability'
+          severity: 'CRITICAL,HIGH'
+          skip-dirs: ''
+          assignee: ''
+          project-id: ''
