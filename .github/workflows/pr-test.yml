@@ -1,14 +1,41 @@
-# Testing to get vars to see how pr info is passed
+# This workflow performs Static Code Analysis and Secrets checks.
 
 name: Static Code Analysis
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
   
 jobs:
+  build:
+    name: PR Test
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        
+      - name: Run Trivy vulnerability scanner for pull request
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+          format: 'table'
+          output: 'result.tbl'
+
   comment:
+    needs: build
     runs-on: ubuntu-latest
     steps:
+      - name: Create Comment
+        run: |
+          echo '## Trivy Scan Results' >> $GITHUB_ENV
+          echo '```shell' >> $GITHUB_ENV
+          cat result.tbl >> $GITHUB_ENV
+          echo '```' >> $GITHUB_ENV
+
       - uses: actions/github-script@v6
         with:
           script: | 
@@ -16,5 +43,5 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: 'Test Comment from Action!'
+              body: '${{ GITHUB_ENV }}'
             })
