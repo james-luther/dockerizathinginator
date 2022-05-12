@@ -25,10 +25,6 @@ jobs:
           format: 'table'
           output: 'result.tbl'
 
-  comment:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
       - name: Create Comment
         run: |
           echo '## Trivy Scan Results' >> $GITHUB_ENV
