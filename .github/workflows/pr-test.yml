@@ -13,3 +13,5 @@ jobs:
 
       - name: Create Comment
         run: gh pr comment ${{ github.event.number }} --body "Test Comment from Action and GH CLI"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
