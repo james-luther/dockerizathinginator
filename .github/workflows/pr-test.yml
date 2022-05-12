@@ -25,13 +25,6 @@ jobs:
           format: 'table'
           output: 'result.tbl'
 
-      - name: Create Comment
-        run: |
-          echo '## Trivy Scan Results' >> $GITHUB_ENV
-          echo '```shell' >> $GITHUB_ENV
-          cat result.tbl >> $GITHUB_ENV
-          echo '```' >> $GITHUB_ENV
-
       - uses: actions/github-script@v6
         with:
           script: | 
