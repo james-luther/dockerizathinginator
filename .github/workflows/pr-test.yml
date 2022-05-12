@@ -32,5 +32,5 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: '## Trivy Scan Results <br> ```shell <br> ${{ result.tbl }} <br> ```'
+              body: '## Trivy Scan Results <br> ```shell <br> ${{ github.event.number }} <br> ```'
             })
