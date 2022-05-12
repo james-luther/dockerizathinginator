@@ -10,8 +10,14 @@ jobs:
     name: PR Var Test
     runs-on: ubuntu-18.04
     steps:
-
       - name: Create Comment
-        run: gh pr comment ${{ github.event.number }} --body "Test Comment from Action and GH CLI"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: actions/github-script@v6
+        with:
+          script: 
+            github.rest.issues.createComment({
+              issue_number: conext.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: 'Test Comment from Action!'
+            })
+
