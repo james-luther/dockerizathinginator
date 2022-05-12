@@ -1,0 +1,15 @@
+# Testing to get vars to see how pr info is passed
+
+name: Static Code Analysis
+
+on:
+  pull_request:
+  
+jobs:
+  build:
+    name: PR Var Test
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Grab Var
+        run: |
+          echo $GITHUB_REF
