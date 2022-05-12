@@ -10,11 +10,7 @@ jobs:
     name: PR Var Test
     runs-on: ubuntu-18.04
     steps:
+
       - name: Grab Var
         run: |
-          echo $GITHUB_REF
-
-      - name: Create Comment
-        run: |
-        echo $GITHUB_REF | cut -d '/' -f 3 >> $GITHUB_ENV
-        gh pr comment $GITHUB_ENV --body 'Test Comment'
+          echo ${{ github.event }}
