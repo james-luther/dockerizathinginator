@@ -28,6 +28,10 @@ jobs:
           format: 'table'
           output: 'result.tbl'
 
+      - name: Populate Output variable
+        run: |
+          cat result.tbl > ${{ env.OUTPUT }}
+
       - uses: actions/github-script@v6
         with:
           script: | 
