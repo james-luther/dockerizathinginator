@@ -13,4 +13,4 @@ jobs:
 
       - name: Grab Var
         run: |
-          echo ${{ github.event }}
+          echo ${{ github.event.number }}
