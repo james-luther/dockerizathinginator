@@ -26,6 +26,8 @@ jobs:
           output: 'result.tbl'
 
       - uses: actions/github-script@v6
+        env:
+          result: 'result.tbl'
         with:
           script: | 
             github.rest.issues.createComment({
@@ -34,5 +36,3 @@ jobs:
               repo: context.repo.repo,
               body: '## Trivy Scan Results <br> ```shell  ${{ result }}  ```'
             })
-          env:
-            result: 'result.tbl'
