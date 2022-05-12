@@ -13,3 +13,8 @@ jobs:
       - name: Grab Var
         run: |
           echo $GITHUB_REF
+
+      - name: Create Comment
+        run: |
+        echo $GITHUB_REF | cut -d '/' -f 3 >> $GITHUB_ENV
+        gh pr comment $GITHUB_ENV --body 'Test Comment'
