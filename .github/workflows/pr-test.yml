@@ -12,7 +12,6 @@ jobs:
     steps:
 
       - name: Create Comment
-        run: gh pr comment ${{ github.event.number }} --body "Test Comment from Action and GH CLI"
+        run: gh pr comment ${{ github.event.pull_request.url }} --body "Test Comment from Action and GH CLI"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.event.repository.name }}
