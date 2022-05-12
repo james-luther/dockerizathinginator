@@ -11,6 +11,5 @@ jobs:
     runs-on: ubuntu-18.04
     steps:
 
-      - name: Grab Var
-        run: |
-          echo ${{ github.event.number }}
+      - name: Create Comment
+        run: gh pr comment ${{ github.event.number }} --body "Test Comment from Action and GH CLI"
