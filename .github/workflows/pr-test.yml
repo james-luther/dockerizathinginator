@@ -20,7 +20,7 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
-          severity: 'HIGH,CRITICAL'
+          severity: 'HIGH,CRITICAL,MEDIUM,LOW'
           ignore-unfixed: true
           format: 'table'
           output: 'result.tbl'
@@ -32,8 +32,5 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: '## Trivy Scan Results \n \
-                    ```shell\n \
-                    + result.tbl\n \
-                    ```'
+              body: '## Trivy Scan Results <br> ```shell <br> ${{ result.tbl }} <br> ```'
             })
