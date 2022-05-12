@@ -7,14 +7,13 @@ on:
     branches:
       - main
   pull_request:
-
-env:
-  OUTPUT: result.tbl
   
 jobs:
   build:
     name: PR Test
     runs-on: ubuntu-18.04
+    env:
+      OUTPUT: 'None'
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
