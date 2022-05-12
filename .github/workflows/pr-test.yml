@@ -7,6 +7,9 @@ on:
     branches:
       - main
   pull_request:
+
+env:
+  OUTPUT: result.tbl
   
 jobs:
   build:
@@ -26,13 +29,11 @@ jobs:
           output: 'result.tbl'
 
       - uses: actions/github-script@v6
-        env:
-          result: 'result.tbl'
         with:
           script: | 
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: '## Trivy Scan Results <br> ```shell  ${{ result }}  ```'
+              body: '## Trivy Scan Results <br> ```shell  ${{ env.OUTPUT }}  ```'
             })
