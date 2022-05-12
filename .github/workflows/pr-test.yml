@@ -6,14 +6,13 @@ on:
   pull_request:
   
 jobs:
-  build:
+  comment:
     name: PR Var Test
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     steps:
-      - name: Create Comment
         uses: actions/github-script@v6
         with:
-          script: 
+          script: | 
             github.rest.issues.createComment({
               issue_number: conext.issue.number,
               owner: context.repo.owner,
