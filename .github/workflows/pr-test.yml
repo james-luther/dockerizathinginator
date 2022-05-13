@@ -17,6 +17,7 @@ jobs:
         uses: actions/checkout@v2
         
       - name: Run Trivy vulnerability scanner for pull request
+        id: trivy-scan
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
@@ -25,10 +26,6 @@ jobs:
           format: 'table'
           output: 'result.tbl'
 
-      - name: Populate Output variable
-        run: |
-          cat result.tbl > ${{ env.OUTPUT }}
-
       - uses: actions/github-script@v6
         with:
           script: | 
@@ -36,5 +33,5 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: '## Trivy Scan Results <br> ```  ${{ env.OUTPUT }}  ```'
+              body: '## Trivy Scan Results <br> ``` ${{ steps.trivy-scan.outputs.result }}   ```'
             })
