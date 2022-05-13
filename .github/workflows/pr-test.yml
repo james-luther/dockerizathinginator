@@ -45,9 +45,14 @@ jobs:
           format: 'table'
           output: 'result.tbl'
 
-      - name: Create Summary  
+      - name: Create Summary
+        if: results.tbl != ''
         run: |
-          echo '## Trivy Scan Summary:'
+          echo '## Trivy Scan Summary:' >> $GITHUB_STEP_SUMMARY
           echo '```shell' >> $GITHUB_STEP_SUMMARY
           cat result.tbl >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
+        if: results.tbl == ''
+        run: |
+          echo '## Trivy Scan Summary:' >> $GITHUB_STEP_SUMMARY
+          echo 'Vulnerability scan, secrets scan, and code analysis completed with 0 vulnerabilities found.' >> $GITHUB_STEP_SUMMARY
