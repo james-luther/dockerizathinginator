@@ -48,7 +48,7 @@ jobs:
       - name: Create Summary
         run: |
           echo '## Trivy Scan Summary:' >> $GITHUB_STEP_SUMMARY
-          echo -n "Scan completed successfully at: " && date >> $GITHUB_STEP_SUMMARY
+          echo "Scan completed successfully at: " && date >> $GITHUB_STEP_SUMMARY
           [ ! -s result.tbl ] && 
           echo "Trivy found 0 vulnerabilities." >> $GITHUB_STEP_SUMMARY ||
           echo '```shell' >> $GITHUB_STEP_SUMMARY && cat result.tbl >> $GITHUB_STEP_SUMMARY && echo '```' >> $GITHUB_STEP_SUMMARY
