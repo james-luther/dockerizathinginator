@@ -13,7 +13,7 @@ jobs:
     name: PR Test
     runs-on: ubuntu-18.04
     env:
-      reuslts: none
+      Reuslts: none
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -27,8 +27,8 @@ jobs:
           format: 'table'
           output: 'result.tbl'
 
-      -run: |
-        echo 'results<<EOF' >> $GITHUB_ENV
+      - run: |
+        echo 'Results<<EOF' >> $GITHUB_ENV
         cat result.tbl >> $GITHUB_ENV
         echo 'EOF' >> $GITHUB_ENV
 
@@ -39,5 +39,5 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: '## Trivy Scan Results <br> ``` ${{ env.results }}   ```'
+              body: '## Trivy Scan Results <br> ``` ${{ env.Results }}   ```'
             })
