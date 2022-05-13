@@ -22,4 +22,4 @@ jobs:
           echo "REF: $GITHUB_REF"
           echo "Repository Name: $GITHUB_REPOSITORY"
           echo "Repository Owner: $GITHUB_REPOSITORY_OWNER"
-          echo "Event Object: ${{ github.event.$GIHUB_EVENT_NAME }}"
+          echo "Event Object: ${{ github.event }}"
