@@ -13,7 +13,7 @@ jobs:
     name: PR Test
     runs-on: ubuntu-18.04
     env:
-      Reuslts: none
+      Results: none
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
