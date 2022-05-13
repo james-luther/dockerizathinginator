@@ -27,10 +27,10 @@ jobs:
           format: 'table'
           output: 'result.tbl'
 
-        -run: |
-          echo 'SCAN<<EOF' >> $GITHUB_ENV
-          cat result.tbl >> $GITHUB_ENV
-          echo 'EOF' >> $GITHUB_ENV
+      -run: |
+        echo 'SCAN<<EOF' >> $GITHUB_ENV
+        cat result.tbl >> $GITHUB_ENV
+        echo 'EOF' >> $GITHUB_ENV
 
       - uses: actions/github-script@v6
         with:
