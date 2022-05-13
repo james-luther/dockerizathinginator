@@ -52,6 +52,8 @@ jobs:
           echo '```shell' >> $GITHUB_STEP_SUMMARY
           cat result.tbl >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
+        
+      - name: Create Summary
         if: results.tbl == ''
         run: |
           echo '## Trivy Scan Summary:' >> $GITHUB_STEP_SUMMARY
