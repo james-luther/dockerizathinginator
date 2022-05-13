@@ -7,8 +7,8 @@ on:
   schedule:
     - cron: '0 7 * * *'
   push:
-    branch:
-      main
+    branches:
+      - main
   pull_request:
   
 jobs:
@@ -48,7 +48,8 @@ jobs:
       - name: Create Summary
         run: |
           echo '## Trivy Scan Summary:' >> $GITHUB_STEP_SUMMARY
-          [ ! -s result.tbl ] && echo "0 vulnerabilities found" >> $GITHUB_STEP_SUMMARY ||
+          [ ! -s result.tbl ] && 
+          echo "Scan completed successfully <br> 0 vulnerabilities found" >> $GITHUB_STEP_SUMMARY ||
           echo '```shell' >> $GITHUB_STEP_SUMMARY
           cat result.tbl >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
