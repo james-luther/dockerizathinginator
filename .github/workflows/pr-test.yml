@@ -26,6 +26,8 @@ jobs:
           output: 'result.tbl'
 
       - run: |
+          echo "Assigning results to env var"
+          cat result.tbl
           echo 'trivy_results<<EOF' >> $GITHUB_ENV
           cat result.tbl >> $GITHUB_ENV
           echo 'EOF' >> $GITHUB_ENV
@@ -39,6 +41,3 @@ jobs:
               repo: context.repo.repo,
               body: '## Trivy Scan Results <br> ``` ${{ env.trivy_results }}   ```'
             })
-
-      - run: |
-          echo "${{ env.trivy_results }}"
