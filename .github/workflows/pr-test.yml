@@ -1,4 +1,4 @@
-# This workflow performs Static Code Analysis and Secrets checks. All findings are reported as issues.
+# This workflow performs Static Code Analysis and Secrets checks. All findings are reported as issues
 
 name: Static Code Analysis
 
