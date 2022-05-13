@@ -16,8 +16,10 @@ jobs:
     steps:
       - name: Echo ENVs
         run: |
-          echo "Event: $GITHUB_EVENT"
           echo "Event Name: $GITHUB_EVENT_NAME"
+          echo "Event Path: $GITHUB_EVENT_PATH"
+          echo "HEAD_REF: $GITHUB_HEAD_REF"
+          echo "REF: $GITHUB_REF"
           echo "Repository Name: $GITHUB_REPOSITORY"
           echo "Repository Owner: $GITHUB_REPOSITORY_OWNER"
-          echo "Event Object: ${{ github.event }}"
+          echo "Event Object: ${{ github.event.$GIHUB_EVENT_NAME }}"
