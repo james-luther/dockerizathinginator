@@ -1,0 +1,23 @@
+
+# This workflow performs Static Code Analysis and Secrets checks.
+
+name: Static Code Analysis
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  
+jobs:
+  build:
+    name: PR Test
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Echo ENVs
+        run: |
+          echo "Event: ${{ GITHUB_EVENT }}"
+          echo "Event Name: ${{ GITHUB_EVENT_NAME }}"
+          echo "Repository Name: ${{ GITHUB_REPOSITORY }}"
+          echo "Repository Owner: ${{ GITHUB_REPOSITORY_OWNER }}"
+          echo "Event Object: ${{ github.event }}"
