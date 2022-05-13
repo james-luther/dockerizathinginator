@@ -12,12 +12,13 @@ jobs:
   build:
     name: PR Test
     runs-on: ubuntu-18.04
+    env:
+      SCAN: none
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
         
       - name: Run Trivy vulnerability scanner for pull request
-        id: trivy-scan
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
@@ -26,6 +27,11 @@ jobs:
           format: 'table'
           output: 'result.tbl'
 
+        -run: |
+          echo 'SCAN<<EOF' >> $GITHUB_ENV
+          cat result.tbl >> $GITHUB_ENV
+          echo 'EOF' >> $GITHUB_ENV
+
       - uses: actions/github-script@v6
         with:
           script: | 
@@ -33,5 +39,5 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: '## Trivy Scan Results <br> ``` ${{ steps.trivy-scan.outputs.result }}   ```'
+              body: '## Trivy Scan Results <br> ``` ${{ env.SCAN }}   ```'
             })
