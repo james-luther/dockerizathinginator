@@ -27,7 +27,7 @@ jobs:
           ignore-unfixed: true
           format: 'json'
           output: 'result.json'
-          exit-code: '1'
+          exit-code: 1
 
       - name: Report Findings
         uses: chili-piper/trivy-report-issue-action@PR-Features
