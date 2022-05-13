@@ -1,4 +1,5 @@
 # This workflow performs Static Code Analysis and Secrets checks. All findings are reported as issues.
+# For pull requests, issues found are commented in the PR.
 
 name: Static Code Analysis
 
