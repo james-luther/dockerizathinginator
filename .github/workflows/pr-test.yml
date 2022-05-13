@@ -28,9 +28,9 @@ jobs:
           output: 'result.tbl'
 
       - run: |
-        echo 'Results<<EOF' >> $GITHUB_ENV
-        cat result.tbl >> $GITHUB_ENV
-        echo 'EOF' >> $GITHUB_ENV
+          echo 'Results<<EOF' >> $GITHUB_ENV
+          cat result.tbl >> $GITHUB_ENV
+          echo 'EOF' >> $GITHUB_ENV
 
       - uses: actions/github-script@v6
         with:
