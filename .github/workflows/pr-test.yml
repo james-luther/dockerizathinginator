@@ -23,21 +23,3 @@ jobs:
           severity: 'HIGH,CRITICAL,MEDIUM,LOW'
           ignore-unfixed: true
           format: 'table'
-          output: 'result.tbl'
-
-      - run: |
-          echo "Assigning results to env var"
-          cat result.tbl
-          echo 'trivy_results<<EOF' >> $GITHUB_ENV
-          cat result.tbl >> $GITHUB_ENV
-          echo 'EOF' >> $GITHUB_ENV
-
-      - uses: actions/github-script@v6
-        with:
-          script: | 
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: '## Trivy Scan Results <br> ``` ${{ env.trivy_results }}   ```'
-            })
