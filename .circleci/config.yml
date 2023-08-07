@@ -32,7 +32,7 @@ jobs:
 
 workflows:
   security_flow:
-  when:
-    - equal: [main, << pipeline.git.branch >>]
-  jobs:
-    fluidattacks
+    when:
+      - equal: [main, << pipeline.git.branch >>]
+    jobs:
+      fluidattacks
