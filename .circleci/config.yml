@@ -10,7 +10,10 @@ jobs:
       - run: 
           name: Setup Prerequisites
           command: |
+            sudo apt update
             sudo apt -y install csvkit
+      - setup_remote_docker:
+          version: 20.10.14
       - run:
           name: Verify Configuration
           command: |
@@ -18,7 +21,7 @@ jobs:
       - run:
           name: Run CASA SAST scan
           command: |
-            sudo docker run -v /home/circleci/project/dockerizathinginator:/workingdir m gitlab:fluidattacks/universe@trunk /skims scan ./config.yaml
+            sudo docker run -v /home/circleci/project:/workingdir m gitlab:fluidattacks/universe@trunk /skims scan ./config.yaml
       - run:
           name: Prepare Results for DefectDojo
           command: |
