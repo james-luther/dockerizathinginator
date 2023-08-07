@@ -3,8 +3,6 @@ version: 2.1
 jobs: 
   fluidattacks:
     docker: cimg/base:current           
-    # docker:
-    #   - image: ghcr.io/fluidattacks/makes/amd64:latest
     resource_class: large
     steps:
       - checkout
@@ -12,10 +10,6 @@ jobs:
           name: Setup Prerequisites
           command: |
             sudo apt -y install csvkit
-            # nix-env -iA nixpkgs.csvkit
-            # nix-env -iA nixpkgs.gawk
-            # nix-env -iA nixpkgs.gnused
-            # nix-env -iA nixpkgs.curlWithGnuTls
       - run:
           name: Verify Configuration
           command: |
