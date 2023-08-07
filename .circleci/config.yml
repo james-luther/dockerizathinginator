@@ -2,18 +2,20 @@ version: 2.1
 
 jobs: 
   fluidattacks:
-    docker:
-      - image: ghcr.io/fluidattacks/makes/amd64:latest
-    resource_class: small
+    docker: cimg/base:current           
+    # docker:
+    #   - image: ghcr.io/fluidattacks/makes/amd64:latest
+    resource_class: large
     steps:
       - checkout
       - run: 
           name: Setup Prerequisites
           command: |
-            nix-env -iA nixpkgs.csvkit
-            nix-env -iA nixpkgs.gawk
-            nix-env -iA nixpkgs.gnused
-            nix-env -iA nixpkgs.curlWithGnuTls
+            sudo apt -y install csvkit
+            # nix-env -iA nixpkgs.csvkit
+            # nix-env -iA nixpkgs.gawk
+            # nix-env -iA nixpkgs.gnused
+            # nix-env -iA nixpkgs.curlWithGnuTls
       - run:
           name: Verify Configuration
           command: |
@@ -21,7 +23,7 @@ jobs:
       - run:
           name: Run CASA SAST scan
           command: |
-            m gitlab:fluidattacks/universe@trunk /skims scan /root/project/config.yaml
+            sudo docker run -v /home/circleci/project/dockerizathinginator:/workingdir m gitlab:fluidattacks/universe@trunk /skims scan ./config.yaml
       - run:
           name: Prepare Results for DefectDojo
           command: |
