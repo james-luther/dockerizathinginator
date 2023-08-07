@@ -3,7 +3,7 @@ version: 2.1
 jobs: 
   fluidattacks:
     docker:
-      - image: nixos/nix:latest
+      - image: ghcr.io/fluidattacks/makes/amd64:latest
     resource_class: small
     steps:
       - checkout
@@ -14,7 +14,6 @@ jobs:
             nix-env -iA nixpkgs.gawk
             nix-env -iA nixpkgs.gnused
             nix-env -iA nixpkgs.curlWithGnuTls
-            nix-env -if https://github.com/fluidattacks/makes/archive/23.07.tar.gz
       - run:
           name: Verify Configuration
           command: |
