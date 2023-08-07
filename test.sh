@@ -1,6 +1,8 @@
 csvcut -c 1-8 Fluid-Attacks-Results.csv > 1.csv
 csvcut -c 9 Fluid-Attacks-Results.csv > snippet.csv
 csvcut -c 10 Fluid-Attacks-Results.csv > method.csv
+now=$(date +%m/%d/%y)
+echo 'Date,Severity' > 3.csv
 for i in $(csvcut -c 4 Fluid-Attacks-Results.csv | cut -d ":" -f2 | cut -d "/" -f1); do
   if awk "BEGIN {exit !($i < 4.0)}"; then
     echo "$now,Low" >> 3.csv;
