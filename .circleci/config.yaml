@@ -1,0 +1,36 @@
+version: 2.1
+
+jobs: 
+  fluidattacks:
+    docker:
+      - image: nixos/nix:latest
+    resource_class: small
+    circleci_ip_ranges: true
+    steps:
+      - checkout
+      - run: 
+          name: Setup Prerequisites
+          command: |
+            nix-env -iA nixpkgs.csvkit
+            nix-env -iA nixpkgs.gawk
+            nix-env -iA nixpkgs.gnused
+            nix-env -iA nixpkgs.curlWithGnuTls
+            nix-env -if https://github.com/fluidattacks/makes/archive/23.07.tar.gz
+      - run:
+          name: Verify Configuration
+          command: |
+            mv /root/project/.circleci/casa/config.yaml /root/project/config.yaml
+      - run:
+          name: Run CASA SAST scan
+          command: |
+            m gitlab:fluidattacks/universe@trunk /skims scan /root/project/config.yaml
+      - run:
+          name: Prepare Results for DefectDojo
+          command: |
+            mv /root/projects/.circleci/casa/format.sh /root/project/format.sh
+            sh /root/project/format.sh
+
+workflows:
+  security_flow:
+    - fluidattacks:
+      <<: *master
