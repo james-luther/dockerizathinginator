@@ -2,7 +2,8 @@ version: 2.1
 
 jobs: 
   fluidattacks:
-    docker: cimg/base           
+    docker: 
+      - image: cimg/base:current
     resource_class: large
     steps:
       - checkout
