@@ -36,4 +36,4 @@ workflows:
       and:
         - equal: [main, << pipeline.git.branch >>]
     jobs:
-      fluidattacks
+      [fluidattacks]
