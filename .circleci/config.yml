@@ -1,11 +1,5 @@
 version: 2.1
 
-master: &master
-  filters:
-    branches:
-      only:
-        - master
-
 jobs: 
   fluidattacks:
     docker:
