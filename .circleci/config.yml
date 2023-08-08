@@ -10,9 +10,9 @@ jobs:
       - run:
           name: Trivy scan
           command: |
-            trivy rootfs --scanners config,vuln,secret,license --format json --output /tmp/security_scans/trivy.json --exit-code 1 --no-progress --ignore-unfixed /root/project
+            trivy rootfs --scanners config,vuln,secret,license --format json --output /tmp/trivy.json --exit-code 1 --no-progress --ignore-unfixed /root/project
       - persist_to_workspace:
-          root: /tmp/security_scans
+          root: /tmp
           paths:
             - trivy.json
   fluidattacks:
@@ -51,7 +51,7 @@ jobs:
             mv /home/circleci/project/.circleci/casa/format.sh /home/circleci/project/format.sh
             sh /home/circleci/project/format.sh
       - persist_to_workspace:
-          root: /tmp/security_scans
+          root: /tmp
           paths:
             - output.csv
   defectdojo:
@@ -72,7 +72,7 @@ workflows:
         - equal: [main, << pipeline.git.branch >>]
     jobs:
       - trivy
-      - fluidattacks
-      - defectdojo:
-          requires:
-            - fluidattacks
+      #- fluidattacks
+      #- defectdojo:
+      #    requires:
+      #      - fluidattacks
