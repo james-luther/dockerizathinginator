@@ -1,42 +1,20 @@
 version: 2.1
 
 jobs: 
-  fluidattacks:
+  fluidattacks: 
     docker: 
-      - image: cimg/base:current
-    resource_class: large
+      - image: ghcr.io/fluidattacks/makes/amd64
+    resource_class: small
     steps:
       - checkout
-      - run: 
-          name: Setup Prerequisites
-          command: |
-            sudo apt update
-            sudo apt -y install csvkit
-      - setup_remote_docker:
-          version: 20.10.14
       - run:
           name: Verify Configuration
           command: |
             mv ~/project/.circleci/casa/config.yaml ~/project/config.yaml
       - run:
-          name: Setup Fluidattacks
-          command: |
-            docker create -v /working-dir --name repo alpine:3.4 /bin/true
-            docker cp /home/circleci/project repo:/working-dir
-      - run:
           name: Run CASA SAST scan
           command: |
-            docker run --volumes-from repo --name fluidattacks ghcr.io/fluidattacks/makes/amd64 m gitlab:fluidattacks/universe@trunk /skims scan project/config.yaml
-      - run:
-          name: Copy results from Fluidattacks container
-          command: |
-            docker cp fluidattacks:/working-dir/Fluid-Attacks-Results.csv .
-      - run:
-          name: Prepare Results for DefectDojo
-          command: |
-            mv /home/circleci/project/.circleci/casa/format.sh /home/circleci/project/format.sh
-            sh /home/circleci/project/format.sh
-
+            m gitlab:fluidattacks/universe@trunk /skims scan project/config.yaml
 workflows:
   security_flow:
     when:
