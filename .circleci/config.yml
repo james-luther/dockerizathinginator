@@ -17,11 +17,11 @@ jobs:
       - run:
           name: Verify Configuration
           command: |
-            mv /root/project/.circleci/casa/config.yaml /root/project/config.yaml
+            mv ~/project/.circleci/casa/config.yaml ~/project/config.yaml
       - run:
           name: Run CASA SAST scan
           command: |
-            sudo docker run -v /home/circleci/project:/workingdir m gitlab:fluidattacks/universe@trunk /skims scan ./config.yaml
+            docker run -v /home/circleci/project:/working-dir ghcr.io/fluidattacks/makes/amd64 m gitlab:fluidattacks/universe@trunk /skims scan ./config.yaml
       - run:
           name: Prepare Results for DefectDojo
           command: |
