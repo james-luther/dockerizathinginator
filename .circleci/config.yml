@@ -4,7 +4,7 @@ jobs:
   trivy:
     docker:
       - image: aquasec/trivy:latest
-  resource_class: small
+    resource_class: small
     steps:
       - checkout
       - run:
@@ -71,7 +71,7 @@ workflows:
       and:
         - equal: [main, << pipeline.git.branch >>]
     jobs:
-      - trivy_scans
+      - trivy
       - fluidattacks
       - defectdojo:
           requires:
