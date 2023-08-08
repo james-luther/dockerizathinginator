@@ -59,11 +59,12 @@ jobs:
       - image: cimg/base:current
     resource_class: small
     steps:
-      - checkout
+      - attach_workspace:
+          at: /tmp
       - run:
-          name: Post Scan to DefectDojo
+          name: View Trivy Scan data
           command: |
-            curl -X POST -F "scan_type=Bandit Scan" -F "engagement=1" -F "scan_date=$(date +%Y-%m-%d)" -F "file=@/tmp/fluidattacks/output.csv" -H "Authorization: Token ${DOJO_TOKEN}" ${DOJO_URL}/api/v2/import-scan/
+            cat /tmp/trivy.json
 
 workflows:
   security_flow:
@@ -73,6 +74,6 @@ workflows:
     jobs:
       - trivy
       #- fluidattacks
-      #- defectdojo:
-      #    requires:
-      #      - fluidattacks
+      - defectdojo:
+          requires:
+            - trivy
