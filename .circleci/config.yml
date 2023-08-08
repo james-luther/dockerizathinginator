@@ -22,7 +22,7 @@ jobs:
           name: Setup Fluidattacks
           command: |
             docker create -v /working-dir --name repo alpine:3.4 /bin/true
-            docker cp project/ repo:/working-dir
+            docker cp /home/circleci/project repo:/working-dir
       - run:
           name: Run CASA SAST scan
           command: |
