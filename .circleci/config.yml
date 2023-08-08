@@ -19,9 +19,18 @@ jobs:
           command: |
             mv ~/project/.circleci/casa/config.yaml ~/project/config.yaml
       - run:
+          name: Setup Fluidattacks
+          command: |
+            docker create -v /working-dir --name repo alpine:3.4 /bin/true
+            docker cp project/ repo:/working-dir
+      - run:
           name: Run CASA SAST scan
           command: |
-            docker run -v /home/circleci/project:/working-dir ghcr.io/fluidattacks/makes/amd64 m gitlab:fluidattacks/universe@trunk /skims scan ./config.yaml
+            docker run --volumes-from repo --name fluidattacks ghcr.io/fluidattacks/makes/amd64 m gitlab:fluidattacks/universe@trunk /skims scan project/config.yaml
+      - run:
+          name: Copy results from Fluidattacks container
+          command: |
+            docker cp fluidattacks:/working-dir/project/Fluid-Attacks-Results.csv .
       - run:
           name: Prepare Results for DefectDojo
           command: |
