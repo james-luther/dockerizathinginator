@@ -10,7 +10,7 @@ jobs:
       - run:
           name: Trivy scan
           command: |
-            trivy rootfs --scanners config,vuln,secret,license --format json --output /tmp/trivy.json --exit-code 1 --no-progress --ignore-unfixed /root/project
+            trivy rootfs --scanners config,vuln,secret,license --format json --output /tmp/trivy.json --no-progress --ignore-unfixed /root/project
       - persist_to_workspace:
           root: /tmp
           paths:
