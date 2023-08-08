@@ -1,6 +1,20 @@
 version: 2.1
 
-jobs: 
+jobs:
+  trivy:
+    docker:
+      - image: aquasec/trivy:latest
+  resource_class: small
+    steps:
+      - checkout
+      - run:
+          name: Trivy scan
+          command: |
+            trivy rootfs --scanners config,vuln,secret,license --format json --output /tmp/security_scans/trivy.json --exit-code 1 --no-progress --ignore-unfixed /home/circleci/project
+      - persist_to_workspace:
+          root: /tmp/security_scans
+          paths:
+            - trivy.json
   fluidattacks:
     docker: 
       - image: cimg/base:current
@@ -37,7 +51,7 @@ jobs:
             mv /home/circleci/project/.circleci/casa/format.sh /home/circleci/project/format.sh
             sh /home/circleci/project/format.sh
       - persist_to_workspace:
-          root: /tmp/fluidattacks
+          root: /tmp/security_scans
           paths:
             - output.csv
   defectdojo:
@@ -57,6 +71,7 @@ workflows:
       and:
         - equal: [main, << pipeline.git.branch >>]
     jobs:
+      - trivy_scans
       - fluidattacks
       - defectdojo:
           requires:
