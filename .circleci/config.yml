@@ -39,7 +39,17 @@ jobs:
       - persist_to_workspace:
           root: /tmp/fluidattacks
           paths:
-            - fluidattacks/output.csv
+            - output.csv
+  defectdojo:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - checkout
+      - run:
+          name: Post Scan to DefectDojo
+          command: |
+            curl -X POST -F "scan_type=Bandit Scan" -F "engagement=1" -F "scan_date=$(date +%Y-%m-%d)" -F "file=@/tmp/fluidattacks/output.csv" -H "Authorization: Token ${DOJO_TOKEN}" ${DOJO_URL}/api/v2/import-scan/
 
 workflows:
   security_flow:
@@ -47,4 +57,7 @@ workflows:
       and:
         - equal: [main, << pipeline.git.branch >>]
     jobs:
-      [fluidattacks]
+      - fluidattacks
+      - defectdojo:
+          requires:
+            - fluidattacks
