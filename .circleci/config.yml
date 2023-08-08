@@ -30,7 +30,7 @@ jobs:
       - run:
           name: Copy results from Fluidattacks container
           command: |
-            docker cp fluidattacks:/working-dir/project/Fluid-Attacks-Results.csv .
+            docker cp fluidattacks:/working-dir/Fluid-Attacks-Results.csv .
       - run:
           name: Prepare Results for DefectDojo
           command: |
