@@ -92,3 +92,4 @@ workflows:
       - defectdojo:
           requires:
             - trivy
+            - zap
