@@ -59,6 +59,7 @@ jobs:
       - image: owasp/zap2docker-live:latest
     resource_class: small
     steps:
+      - checkout
       - run:
           name: Zap Application Scan
           command: |
