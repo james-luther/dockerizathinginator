@@ -54,6 +54,19 @@ jobs:
           root: /tmp
           paths:
             - output.csv
+  zap:
+    docker:
+      - image: owasp/zap2docker-live:latest
+    resource_class: small
+    steps:
+      - run:
+          name: Zap Application Scan
+          command: |
+            zap-baseline.py -t https://www.example.com -x /tmp/zap.xml
+      - persist_to_workspace:
+          root: /tmp
+          paths:
+            - zap.xml
   defectdojo:
     docker:
       - image: cimg/base:current
@@ -65,6 +78,7 @@ jobs:
           name: View Trivy Scan data
           command: |
             cat /tmp/trivy.json
+            cat zap.xml
 
 workflows:
   security_flow:
