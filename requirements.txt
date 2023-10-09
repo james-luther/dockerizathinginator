@@ -42,3 +42,4 @@ whichcraft==0.6.1
 wrapt==1.12.1
 zope.event==4.4
 zope.interface==5.1.0
+setuptools>=65.5.1 # not directly required, pinned by Snyk to avoid a vulnerability
