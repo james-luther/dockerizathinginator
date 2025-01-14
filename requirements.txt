@@ -37,7 +37,7 @@ soupsieve==2.0
 tabulate==0.8.7
 toml==0.10.0
 urllib3==1.26.19
-virtualenv==20.0.23
+virtualenv==20.26.6
 whichcraft==0.6.1
 wrapt==1.12.1
 zope.event==4.4
