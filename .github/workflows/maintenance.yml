@@ -38,7 +38,8 @@ jobs:
           go mod tidy
           
           # Check for Wails updates
-          LATEST_WAILS=$(git ls-remote --tags --sort='version:refname' https://github.com/wailsapp/wails.git | grep -E 'v2\.[0-9]+\.[0-9]+$' | tail -1 | sed 's/.*\///g')
+          # Fetch the latest Wails v2 tag using the GitHub API for robustness
+          LATEST_WAILS=$(curl -s "https://api.github.com/repos/wailsapp/wails/tags?per_page=100" | jq -r '.[].name' | grep -E '^v2\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
           CURRENT_WAILS=$(grep "github.com/wailsapp/wails/v2" go.mod | awk '{print $2}')
           
           echo "Current Wails: $CURRENT_WAILS"
