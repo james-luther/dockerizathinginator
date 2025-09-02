@@ -12,6 +12,38 @@ $APP_NAME = "dockerizathinginator"
 $VERSION = "2.0.0"
 $BUILD_DIR = "build"
 
+# Global variables for validated command paths
+$GoCommand = $null
+$WailsCommand = $null
+$AnsibleCommand = $null
+
+function Get-ValidatedCommand {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$CommandName
+    )
+    
+    try {
+        $command = Get-Command $CommandName -ErrorAction Stop
+        # Return full path for security
+        return $command.Source
+    }
+    catch {
+        return $null
+    }
+}
+
+function Initialize-Commands {
+    Write-Host "Validating system commands..." -ForegroundColor Yellow
+    
+    # Validate and store full paths to prevent path injection
+    $script:GoCommand = Get-ValidatedCommand "go"
+    $script:WailsCommand = Get-ValidatedCommand "wails"
+    $script:AnsibleCommand = Get-ValidatedCommand "ansible"
+    
+    Write-Host "Command validation completed." -ForegroundColor Green
+}
+
 function Write-Header {
     Write-Host "=====================================" -ForegroundColor Cyan
     Write-Host "  Dockerizathinginator Build System  " -ForegroundColor Cyan
@@ -42,37 +74,57 @@ function Test-Dependencies {
     Write-Host "Checking dependencies..." -ForegroundColor Yellow
     
     # Check Go
-    try {
-        $goVersion = go version
-        Write-Host "✓ Go: $goVersion" -ForegroundColor Green
-    }
-    catch {
+    if ($null -eq $script:GoCommand) {
         Write-Host "✗ Go is not installed or not in PATH" -ForegroundColor Red
         Write-Host "  Download from: https://golang.org/dl/" -ForegroundColor Yellow
         return $false
     }
+    else {
+        try {
+            $goVersion = & $script:GoCommand version
+            Write-Host "✓ Go: $goVersion" -ForegroundColor Green
+            Write-Host "  Path: $script:GoCommand" -ForegroundColor Gray
+        }
+        catch {
+            Write-Host "✗ Go command failed to execute" -ForegroundColor Red
+            return $false
+        }
+    }
     
     # Check Wails
-    try {
-        $wailsVersion = wails version
-        Write-Host "✓ Wails: $wailsVersion" -ForegroundColor Green
-    }
-    catch {
+    if ($null -eq $script:WailsCommand) {
         Write-Host "✗ Wails is not installed" -ForegroundColor Red
         Write-Host "  Install with: go install github.com/wailsapp/wails/v2/cmd/wails@latest" -ForegroundColor Yellow
         return $false
     }
+    else {
+        try {
+            $wailsVersion = & $script:WailsCommand version
+            Write-Host "✓ Wails: $wailsVersion" -ForegroundColor Green
+            Write-Host "  Path: $script:WailsCommand" -ForegroundColor Gray
+        }
+        catch {
+            Write-Host "✗ Wails command failed to execute" -ForegroundColor Red
+            return $false
+        }
+    }
     
     # Check Ansible (optional warning)
-    try {
-        $ansibleVersion = ansible --version | Select-Object -First 1
-        Write-Host "✓ Ansible: $ansibleVersion" -ForegroundColor Green
-    }
-    catch {
+    if ($null -eq $script:AnsibleCommand) {
         Write-Host "⚠ Ansible not found - required for deployment functionality" -ForegroundColor Yellow
         Write-Host "  Install options:" -ForegroundColor Yellow
         Write-Host "    - WSL2: sudo apt install ansible" -ForegroundColor Gray
         Write-Host "    - pip: pip install ansible" -ForegroundColor Gray
+    }
+    else {
+        try {
+            $ansibleVersion = & $script:AnsibleCommand --version | Select-Object -First 1
+            Write-Host "✓ Ansible: $ansibleVersion" -ForegroundColor Green
+            Write-Host "  Path: $script:AnsibleCommand" -ForegroundColor Gray
+        }
+        catch {
+            Write-Host "⚠ Ansible command failed to execute" -ForegroundColor Yellow
+        }
     }
     
     return $true
@@ -80,14 +132,24 @@ function Test-Dependencies {
 
 function Install-Dependencies {
     Write-Host "Installing Go dependencies..." -ForegroundColor Yellow
-    go mod tidy
-    go mod download
     
+    if ($null -eq $script:GoCommand) {
+        Write-Host "✗ Go command not available" -ForegroundColor Red
+        return $false
+    }
+    
+    & $script:GoCommand mod tidy
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "✗ Failed to tidy Go modules" -ForegroundColor Red
+        return $false
+    }
+    
+    & $script:GoCommand mod download
     if ($LASTEXITCODE -eq 0) {
         Write-Host "✓ Dependencies installed successfully" -ForegroundColor Green
         return $true
     } else {
-        Write-Host "✗ Failed to install dependencies" -ForegroundColor Red
+        Write-Host "✗ Failed to download dependencies" -ForegroundColor Red
         return $false
     }
 }
@@ -99,7 +161,12 @@ function Build-Application {
         return $false
     }
     
-    wails build
+    if ($null -eq $script:WailsCommand) {
+        Write-Host "✗ Wails command not available" -ForegroundColor Red
+        return $false
+    }
+    
+    & $script:WailsCommand build
     
     if ($LASTEXITCODE -eq 0) {
         Write-Host "✓ Build completed successfully" -ForegroundColor Green
@@ -120,7 +187,12 @@ function Start-Development {
         return
     }
     
-    wails dev
+    if ($null -eq $script:WailsCommand) {
+        Write-Host "✗ Wails command not available" -ForegroundColor Red
+        return
+    }
+    
+    & $script:WailsCommand dev
 }
 
 function Clean-BuildArtifacts {
@@ -136,18 +208,31 @@ function Clean-BuildArtifacts {
         Write-Host "✓ Removed app.syso" -ForegroundColor Green
     }
     
-    go clean
-    Write-Host "✓ Cleaned Go cache" -ForegroundColor Green
+    if ($null -ne $script:GoCommand) {
+        & $script:GoCommand clean
+        Write-Host "✓ Cleaned Go cache" -ForegroundColor Green
+    }
+    else {
+        Write-Host "⚠ Go command not available, skipping cache clean" -ForegroundColor Yellow
+    }
 }
 
 function Run-Tests {
     Write-Host "Running tests..." -ForegroundColor Yellow
-    go test ./...
+    
+    if ($null -eq $script:GoCommand) {
+        Write-Host "✗ Go command not available" -ForegroundColor Red
+        return $false
+    }
+    
+    & $script:GoCommand test ./...
     
     if ($LASTEXITCODE -eq 0) {
         Write-Host "✓ All tests passed" -ForegroundColor Green
+        return $true
     } else {
         Write-Host "✗ Some tests failed" -ForegroundColor Red
+        return $false
     }
 }
 
@@ -183,6 +268,9 @@ function Create-Package {
 
 # Main script logic
 Write-Header
+
+# Initialize and validate commands early for security
+Initialize-Commands
 
 if ($Help) {
     Show-Help
