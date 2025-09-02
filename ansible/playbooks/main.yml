@@ -76,27 +76,27 @@
 
     - name: Docker Installation Phase
       when: not skip_docker | bool
-      import_playbook: install-docker.yml
+      import_tasks: install-docker.yml
 
     - name: Storage Configuration Phase
       when: not skip_storage | bool
-      import_playbook: configure-storage.yml
+      import_tasks: configure-storage.yml
 
     - name: Portainer Deployment Phase
       when: deploy_portainer | bool
-      import_playbook: deploy-portainer.yml
+      import_tasks: deploy-portainer.yml
 
     - name: Network Stack Deployment Phase
       when: deploy_network_stack | bool
-      import_playbook: deploy-network-stack.yml
+      import_tasks: deploy-network-stack.yml
 
     - name: IoT Stack Deployment Phase
       when: deploy_iot_stack | bool
-      import_playbook: deploy-iot-stack.yml
+      import_tasks: deploy-iot-stack.yml
 
     - name: Media Stack Deployment Phase
       when: deploy_media_stack | bool
-      import_playbook: deploy-media-stack.yml
+      import_tasks: deploy-media-stack.yml
 
   post_tasks:
     - name: Clean up package cache
