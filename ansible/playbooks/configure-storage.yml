@@ -1,0 +1,292 @@
+---
+- name: Configure Storage on Raspberry Pi
+  hosts: raspberrypi
+  become: yes
+  vars:
+    storage_type: "{{ storage_type | default('usb') }}"
+    mount_point: "{{ mount_point | default('/mnt/docker') }}"
+    
+  tasks:
+    - name: Configure USB Storage
+      when: storage_type == 'usb'
+      block:
+        - name: Install required packages for USB storage
+          apt:
+            name:
+              - parted
+              - e2fsprogs
+              - usbutils
+            state: present
+
+        - name: List available USB devices
+          shell: lsblk -o NAME,SIZE,TYPE,MOUNTPOINT | grep disk | grep -v mmcblk
+          register: usb_devices
+          changed_when: false
+          failed_when: false
+
+        - name: Display available USB devices
+          debug:
+            msg: "Available USB devices: {{ usb_devices.stdout_lines }}"
+          when: usb_devices.stdout_lines | length > 0
+
+        - name: Fail if no USB device found
+          fail:
+            msg: "No USB storage device found. Please connect a USB drive."
+          when: 
+            - usb_devices.stdout_lines | length == 0
+            - usb_device is not defined
+
+        - name: Prepare USB device
+          when: usb_device is defined
+          block:
+            - name: Validate USB device name format
+              fail:
+                msg: "Invalid USB device name: {{ usb_device }}. Only removable devices are allowed: sdb-sdz (SCSI/SATA), nvme0n1-nvme99n9 (NVMe), mmcblk0-mmcblk9 (SD/MMC). System disk sda and partitions are forbidden."
+              when: >
+                not (
+                  (usb_device is match('^sd[b-z]$')) or
+                  (usb_device is match('^nvme[0-9]{1,2}n[1-9]$')) or
+                  (usb_device is match('^mmcblk[0-9]$'))
+                )
+            
+            - name: Explicitly block system disk sda
+              fail:
+                msg: "Device sda is the primary system disk and cannot be used for storage configuration."
+              when: usb_device == "sda" or usb_device is match('^sda[0-9]+$')
+            
+            - name: Verify device is removable
+              shell: |
+                if [ -f "/sys/block/{{ usb_device }}/removable" ]; then
+                  cat /sys/block/{{ usb_device }}/removable
+                else
+                  echo "0"
+                fi
+              register: device_removable
+              
+            - name: Fail if device is not removable
+              fail:
+                msg: "Device {{ usb_device }} is not marked as removable. Refusing to format system devices for safety."
+              when: device_removable.stdout.strip() != "1"
+            
+            - name: Check if device exists
+              stat:
+                path: "/dev/{{ usb_device }}"
+              register: device_exists
+              
+            - name: Fail if device does not exist
+              fail:
+                msg: "Device /dev/{{ usb_device }} does not exist"
+              when: not device_exists.stat.exists
+
+            - name: Unmount device if mounted
+              mount:
+                path: "{{ item }}"
+                state: unmounted
+              with_items:
+                - "{{ mount_point }}"
+              failed_when: false
+
+            - name: Wipe filesystem signatures
+              command: wipefs -a -f "/dev/{{ usb_device }}"
+              when: format_usb | default(false) | bool
+
+            - name: Create GPT partition table
+              parted:
+                device: "/dev/{{ usb_device }}"
+                label: gpt
+                state: present
+              when: format_usb | default(false) | bool
+
+            - name: Create partition
+              parted:
+                device: "/dev/{{ usb_device }}"
+                number: 1
+                state: present
+                part_end: 100%
+              when: format_usb | default(false) | bool
+
+            - name: Format partition with ext4
+              filesystem:
+                fstype: ext4
+                dev: "/dev/{{ usb_device }}1"
+                opts: -L DOCKER_STORAGE
+              when: format_usb | default(false) | bool
+
+            - name: Get partition UUID
+              command: blkid -s UUID -o value "/dev/{{ usb_device }}1"
+              register: partition_uuid
+              changed_when: false
+
+            - name: Create mount point
+              file:
+                path: "{{ mount_point }}"
+                state: directory
+                owner: root
+                group: root
+                mode: '0755'
+
+            - name: Mount USB storage
+              mount:
+                path: "{{ mount_point }}"
+                src: "UUID={{ partition_uuid.stdout }}"
+                fstype: ext4
+                opts: defaults,noatime
+                state: mounted
+
+            - name: Add to fstab for persistent mounting
+              mount:
+                path: "{{ mount_point }}"
+                src: "UUID={{ partition_uuid.stdout }}"
+                fstype: ext4
+                opts: defaults,noatime
+                state: present
+
+    - name: Configure NFS Storage
+      when: storage_type == 'nfs'
+      block:
+        - name: Install NFS client
+          apt:
+            name: nfs-common
+            state: present
+
+        - name: Create mount point
+          file:
+            path: "{{ mount_point }}"
+            state: directory
+            owner: root
+            group: root
+            mode: '0755'
+
+        - name: Mount NFS share
+          mount:
+            path: "{{ mount_point }}"
+            src: "{{ nfs_server }}:{{ nfs_path }}"
+            fstype: nfs
+            opts: "{{ nfs_options | default('defaults,_netdev,soft,intr,rsize=8192,wsize=8192') }}"
+            state: mounted
+
+    - name: Configure CIFS/SMB Storage
+      when: storage_type == 'cifs'
+      block:
+        - name: Install CIFS utilities
+          apt:
+            name: cifs-utils
+            state: present
+
+        - name: Create mount point
+          file:
+            path: "{{ mount_point }}"
+            state: directory
+            owner: root
+            group: root
+            mode: '0755'
+
+        - name: Create credentials file
+          copy:
+            dest: /etc/samba/docker-share.creds
+            content: |
+              username={{ smb_username }}
+              password={{ smb_password }}
+              domain={{ smb_domain | default('WORKGROUP') }}
+            owner: root
+            group: root
+            mode: '0600'
+          when: smb_username is defined and smb_password is defined
+
+        - name: Mount CIFS share
+          mount:
+            path: "{{ mount_point }}"
+            src: "//{{ smb_server }}/{{ smb_share }}"
+            fstype: cifs
+            opts: "credentials=/etc/samba/docker-share.creds,uid=1000,gid=1000,iocharset=utf8,file_mode=0777,dir_mode=0777,_netdev"
+            state: mounted
+          when: smb_username is defined and smb_password is defined
+
+    - name: Configure Log2Ram for SD card protection
+      when: enable_log2ram | default(true) | bool
+      block:
+        - name: Clone Log2Ram repository
+          git:
+            repo: https://github.com/azlux/log2ram.git
+            dest: /tmp/log2ram
+            version: master
+
+        - name: Run Log2Ram installation script
+          command: /tmp/log2ram/install.sh
+          args:
+            creates: /usr/local/bin/log2ram
+
+        - name: Configure Log2Ram settings
+          lineinfile:
+            path: /etc/log2ram.conf
+            regexp: "^{{ item.key }}="
+            line: "{{ item.key }}={{ item.value }}"
+          loop:
+            - { key: "SIZE", value: "128M" }
+            - { key: "MAIL", value: "false" }
+            - { key: "PATH_DISK", value: '"/var/log"' }
+            - { key: "ZL2R", value: "false" }
+            - { key: "COMP_ALG", value: "lz4" }
+
+        - name: Enable and start Log2Ram service
+          systemd:
+            name: log2ram
+            enabled: yes
+            state: started
+            daemon_reload: yes
+
+    - name: Create Docker directories on storage
+      file:
+        path: "{{ mount_point }}/{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      loop:
+        - docker
+        - docker/volumes
+        - docker/config
+        - docker/data
+        - backups
+
+    - name: Configure Docker to use custom storage location
+      when: storage_type != 'default'
+      block:
+        - name: Stop Docker service
+          systemd:
+            name: docker
+            state: stopped
+
+        - name: Update Docker daemon configuration
+          copy:
+            dest: /etc/docker/daemon.json
+            content: |
+              {
+                "data-root": "{{ mount_point }}/docker",
+                "log-driver": "json-file",
+                "log-opts": {
+                  "max-size": "10m",
+                  "max-file": "3"
+                },
+                "storage-driver": "overlay2"
+              }
+            backup: yes
+
+        - name: Start Docker service
+          systemd:
+            name: docker
+            state: started
+            daemon_reload: yes
+
+    - name: Verify storage configuration
+      command: df -h {{ mount_point }}
+      register: storage_info
+      changed_when: false
+
+    - name: Display storage information
+      debug:
+        msg:
+          - "Storage configured successfully!"
+          - "Mount point: {{ mount_point }}"
+          - "Storage type: {{ storage_type }}"
+          - "{{ storage_info.stdout_lines }}"

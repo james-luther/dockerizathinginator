@@ -1,0 +1,425 @@
+---
+- name: Deploy IoT Stack on Raspberry Pi
+  hosts: raspberrypi
+  become: yes
+  vars:
+    stack_data_root: "{{ volume_path | default('/mnt/docker') }}/data"
+    stack_config_root: "{{ volume_path | default('/mnt/docker') }}/config"
+    deploy_influxdb: true
+    deploy_mosquitto: true
+    deploy_home_assistant: true
+    deploy_grafana: true
+    deploy_node_red: false
+    deploy_zigbee2mqtt: false
+
+  tasks:
+    - name: Ensure Docker network exists
+      docker_network:
+        name: docker_network
+        driver: bridge
+
+    - name: Create directories for IoT stack
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      loop:
+        - "{{ stack_data_root }}"
+        - "{{ stack_config_root }}"
+
+    # InfluxDB - Time Series Database
+    - name: Deploy InfluxDB
+      when: deploy_influxdb | bool
+      block:
+        - name: Create InfluxDB directories
+          file:
+            path: "{{ item }}"
+            state: directory
+            owner: 999
+            group: 999
+            mode: '0755'
+          loop:
+            - "{{ stack_data_root }}/influxdb"
+            - "{{ stack_data_root }}/influxdb/data"
+            - "{{ stack_config_root }}/influxdb"
+
+        - name: Generate InfluxDB admin password
+          set_fact:
+            influxdb_admin_password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=16') }}"
+            influxdb_admin_token: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=32') }}"
+
+        - name: Deploy InfluxDB container
+          docker_container:
+            name: influxdb
+            image: influxdb:2.7
+            state: started
+            restart_policy: unless-stopped
+            ports:
+              - "8086:8086"
+            env:
+              DOCKER_INFLUXDB_INIT_MODE: "setup"
+              DOCKER_INFLUXDB_INIT_USERNAME: "admin"
+              DOCKER_INFLUXDB_INIT_PASSWORD: "{{ influxdb_admin_password }}"
+              DOCKER_INFLUXDB_INIT_ORG: "dockerizathinginator"
+              DOCKER_INFLUXDB_INIT_BUCKET: "iot_data"
+              DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: "{{ influxdb_admin_token }}"
+            volumes:
+              - "{{ stack_data_root }}/influxdb/data:/var/lib/influxdb2"
+              - "{{ stack_config_root }}/influxdb:/etc/influxdb2"
+            networks:
+              - name: docker_network
+            labels:
+              com.dockerizathinginator.managed: "true"
+              com.dockerizathinginator.stack: "iot"
+              com.dockerizathinginator.service: "influxdb"
+
+        - name: Save InfluxDB credentials
+          copy:
+            content: |
+              InfluxDB Admin Credentials
+              ==========================
+              URL: http://{{ ansible_host }}:8086
+              Username: admin
+              Password: {{ influxdb_admin_password }}
+              Admin Token: {{ influxdb_admin_token }}
+              Organization: dockerizathinginator
+              Initial Bucket: iot_data
+            dest: "{{ stack_config_root }}/influxdb-credentials.txt"
+            owner: root
+            group: root
+            mode: '0600'
+
+    # Mosquitto - MQTT Broker
+    - name: Deploy Mosquitto MQTT Broker
+      when: deploy_mosquitto | bool
+      block:
+        - name: Create Mosquitto directories
+          file:
+            path: "{{ item }}"
+            state: directory
+            owner: 1883
+            group: 1883
+            mode: '0755'
+          loop:
+            - "{{ stack_data_root }}/mosquitto"
+            - "{{ stack_data_root }}/mosquitto/data"
+            - "{{ stack_data_root }}/mosquitto/log"
+            - "{{ stack_config_root }}/mosquitto"
+
+        - name: Generate Mosquitto password
+          set_fact:
+            mosquitto_password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=16') }}"
+
+        - name: Create Mosquitto configuration
+          copy:
+            dest: "{{ stack_config_root }}/mosquitto/mosquitto.conf"
+            content: |
+              persistence true
+              persistence_location /mosquitto/data/
+              log_dest file /mosquitto/log/mosquitto.log
+              listener 1883
+              allow_anonymous false
+              password_file /mosquitto/config/passwd
+            owner: 1883
+            group: 1883
+            mode: '0644'
+
+        - name: Deploy Mosquitto container
+          docker_container:
+            name: mosquitto
+            image: eclipse-mosquitto:latest
+            state: started
+            restart_policy: unless-stopped
+            ports:
+              - "1883:1883"
+              - "9001:9001"
+            volumes:
+              - "{{ stack_config_root }}/mosquitto:/mosquitto/config"
+              - "{{ stack_data_root }}/mosquitto/data:/mosquitto/data"
+              - "{{ stack_data_root }}/mosquitto/log:/mosquitto/log"
+            networks:
+              - name: docker_network
+            labels:
+              com.dockerizathinginator.managed: "true"
+              com.dockerizathinginator.stack: "iot"
+              com.dockerizathinginator.service: "mosquitto"
+
+        - name: Create Mosquitto user
+          docker_container:
+            name: mosquitto-passwd
+            image: eclipse-mosquitto:latest
+            state: started
+            cleanup: yes
+            detach: no
+            command: mosquitto_passwd -b -c /mosquitto/config/passwd iot {{ mosquitto_password }}
+            volumes:
+              - "{{ stack_config_root }}/mosquitto:/mosquitto/config"
+
+        - name: Restart Mosquitto to apply password
+          docker_container:
+            name: mosquitto
+            restart: yes
+
+        - name: Save Mosquitto credentials
+          copy:
+            content: |
+              Mosquitto MQTT Broker Credentials
+              ==================================
+              Host: {{ ansible_host }}
+              Port: 1883
+              Username: iot
+              Password: {{ mosquitto_password }}
+            dest: "{{ stack_config_root }}/mosquitto-credentials.txt"
+            owner: root
+            group: root
+            mode: '0600'
+
+    # Home Assistant
+    - name: Deploy Home Assistant
+      when: deploy_home_assistant | bool
+      block:
+        - name: Create Home Assistant directories
+          file:
+            path: "{{ stack_data_root }}/homeassistant"
+            state: directory
+            owner: 1000
+            group: 1000
+            mode: '0755'
+
+        - name: Deploy Home Assistant container
+          docker_container:
+            name: homeassistant
+            image: homeassistant/home-assistant:stable
+            state: started
+            restart_policy: unless-stopped
+            network_mode: host
+            env:
+              TZ: "{{ timezone | default('UTC') }}"
+            volumes:
+              - "{{ stack_data_root }}/homeassistant:/config"
+              - "/run/dbus:/run/dbus:ro"
+            devices:
+              - "/dev/ttyUSB0:/dev/ttyUSB0"
+            labels:
+              com.dockerizathinginator.managed: "true"
+              com.dockerizathinginator.stack: "iot"
+              com.dockerizathinginator.service: "homeassistant"
+
+        - name: Save Home Assistant access info
+          copy:
+            content: |
+              Home Assistant Access Information
+              =================================
+              URL: http://{{ ansible_host }}:8123
+              
+              Complete the setup wizard on first access.
+              Integration with Mosquitto MQTT:
+              - Broker: mosquitto
+              - Port: 1883
+              - Use credentials from mosquitto-credentials.txt
+            dest: "{{ stack_config_root }}/homeassistant-info.txt"
+            owner: root
+            group: root
+            mode: '0644'
+
+    # Grafana - Visualization
+    - name: Deploy Grafana
+      when: deploy_grafana | bool
+      block:
+        - name: Create Grafana directories
+          file:
+            path: "{{ item }}"
+            state: directory
+            owner: 472
+            group: 472
+            mode: '0755'
+          loop:
+            - "{{ stack_data_root }}/grafana"
+            - "{{ stack_data_root }}/grafana/provisioning"
+            - "{{ stack_data_root }}/grafana/provisioning/datasources"
+            - "{{ stack_data_root }}/grafana/provisioning/dashboards"
+
+        - name: Generate Grafana admin password
+          set_fact:
+            grafana_admin_password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=16') }}"
+
+        - name: Create InfluxDB datasource configuration
+          copy:
+            dest: "{{ stack_data_root }}/grafana/provisioning/datasources/influxdb.yml"
+            content: |
+              apiVersion: 1
+              datasources:
+                - name: InfluxDB
+                  type: influxdb
+                  access: proxy
+                  url: http://influxdb:8086
+                  jsonData:
+                    version: Flux
+                    organization: dockerizathinginator
+                    defaultBucket: iot_data
+                    tlsSkipVerify: true
+                  secureJsonData:
+                    token: {{ influxdb_admin_token | default('') }}
+            owner: 472
+            group: 472
+            mode: '0644'
+          when: deploy_influxdb | bool
+
+        - name: Deploy Grafana container
+          docker_container:
+            name: grafana
+            image: grafana/grafana:latest
+            state: started
+            restart_policy: unless-stopped
+            ports:
+              - "3000:3000"
+            env:
+              GF_SECURITY_ADMIN_USER: "admin"
+              GF_SECURITY_ADMIN_PASSWORD: "{{ grafana_admin_password }}"
+              GF_INSTALL_PLUGINS: "grafana-clock-panel,grafana-simple-json-datasource"
+              GF_SERVER_ROOT_URL: "http://{{ ansible_host }}:3000"
+            volumes:
+              - "{{ stack_data_root }}/grafana:/var/lib/grafana"
+              - "{{ stack_data_root }}/grafana/provisioning:/etc/grafana/provisioning"
+            networks:
+              - name: docker_network
+            labels:
+              com.dockerizathinginator.managed: "true"
+              com.dockerizathinginator.stack: "iot"
+              com.dockerizathinginator.service: "grafana"
+
+        - name: Save Grafana credentials
+          copy:
+            content: |
+              Grafana Admin Credentials
+              =========================
+              URL: http://{{ ansible_host }}:3000
+              Username: admin
+              Password: {{ grafana_admin_password }}
+              
+              InfluxDB datasource is pre-configured.
+            dest: "{{ stack_config_root }}/grafana-credentials.txt"
+            owner: root
+            group: root
+            mode: '0600'
+
+    # Node-RED
+    - name: Deploy Node-RED
+      when: deploy_node_red | bool
+      block:
+        - name: Create Node-RED directories
+          file:
+            path: "{{ stack_data_root }}/nodered"
+            state: directory
+            owner: 1000
+            group: 1000
+            mode: '0755'
+
+        - name: Deploy Node-RED container
+          docker_container:
+            name: nodered
+            image: nodered/node-red:latest
+            state: started
+            restart_policy: unless-stopped
+            ports:
+              - "1880:1880"
+            env:
+              TZ: "{{ timezone | default('UTC') }}"
+            volumes:
+              - "{{ stack_data_root }}/nodered:/data"
+            networks:
+              - name: docker_network
+            labels:
+              com.dockerizathinginator.managed: "true"
+              com.dockerizathinginator.stack: "iot"
+              com.dockerizathinginator.service: "nodered"
+
+    # Zigbee2MQTT
+    - name: Deploy Zigbee2MQTT
+      when: deploy_zigbee2mqtt | bool
+      block:
+        - name: Create Zigbee2MQTT directories
+          file:
+            path: "{{ stack_data_root }}/zigbee2mqtt"
+            state: directory
+            owner: 1000
+            group: 1000
+            mode: '0755'
+
+        - name: Create Zigbee2MQTT configuration
+          copy:
+            dest: "{{ stack_data_root }}/zigbee2mqtt/configuration.yaml"
+            content: |
+              homeassistant: true
+              permit_join: false
+              mqtt:
+                base_topic: zigbee2mqtt
+                server: mqtt://mosquitto:1883
+                user: iot
+                password: {{ mosquitto_password | default('') }}
+              serial:
+                port: /dev/ttyACM0
+              frontend:
+                port: 8099
+              advanced:
+                log_level: info
+                pan_id: 6754
+                channel: 11
+                network_key:
+                  - 1
+                  - 3
+                  - 5
+                  - 7
+                  - 9
+                  - 11
+                  - 13
+                  - 15
+                  - 0
+                  - 2
+                  - 4
+                  - 6
+                  - 8
+                  - 10
+                  - 12
+                  - 13
+            owner: 1000
+            group: 1000
+            mode: '0644'
+          when: deploy_mosquitto | bool
+
+        - name: Deploy Zigbee2MQTT container
+          docker_container:
+            name: zigbee2mqtt
+            image: koenkk/zigbee2mqtt:latest
+            state: started
+            restart_policy: unless-stopped
+            ports:
+              - "8099:8099"
+            env:
+              TZ: "{{ timezone | default('UTC') }}"
+            volumes:
+              - "{{ stack_data_root }}/zigbee2mqtt:/app/data"
+              - "/run/udev:/run/udev:ro"
+            devices:
+              - "/dev/ttyACM0:/dev/ttyACM0"
+            networks:
+              - name: docker_network
+            labels:
+              com.dockerizathinginator.managed: "true"
+              com.dockerizathinginator.stack: "iot"
+              com.dockerizathinginator.service: "zigbee2mqtt"
+
+    - name: Display IoT stack deployment summary
+      debug:
+        msg:
+          - "IoT Stack Deployment Complete!"
+          - "Deployed services:"
+          - "{% if deploy_influxdb %}InfluxDB: http://{{ ansible_host }}:8086{% endif %}"
+          - "{% if deploy_mosquitto %}Mosquitto MQTT: {{ ansible_host }}:1883{% endif %}"
+          - "{% if deploy_home_assistant %}Home Assistant: http://{{ ansible_host }}:8123{% endif %}"
+          - "{% if deploy_grafana %}Grafana: http://{{ ansible_host }}:3000{% endif %}"
+          - "{% if deploy_node_red %}Node-RED: http://{{ ansible_host }}:1880{% endif %}"
+          - "{% if deploy_zigbee2mqtt %}Zigbee2MQTT: http://{{ ansible_host }}:8099{% endif %}"
+          - "Credentials saved in: {{ stack_config_root }}/"

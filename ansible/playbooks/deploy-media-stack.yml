@@ -1,0 +1,404 @@
+---
+- name: Deploy Media Stack on Raspberry Pi
+  hosts: raspberrypi
+  become: yes
+  vars:
+    stack_data_root: "{{ volume_path | default('/mnt/docker') }}/data"
+    stack_config_root: "{{ volume_path | default('/mnt/docker') }}/config"
+    media_root: "{{ volume_path | default('/mnt/docker') }}/media"
+    deploy_plex: false
+    deploy_jellyfin: true
+    deploy_nextcloud: true
+    deploy_transmission: false
+    deploy_sonarr: false
+    deploy_radarr: false
+    deploy_jackett: false
+
+  tasks:
+    - name: Ensure Docker network exists
+      docker_network:
+        name: docker_network
+        driver: bridge
+
+    - name: Create directories for media stack
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: 1000
+        group: 1000
+        mode: '0755'
+      loop:
+        - "{{ stack_data_root }}"
+        - "{{ stack_config_root }}"
+        - "{{ media_root }}"
+        - "{{ media_root }}/movies"
+        - "{{ media_root }}/tv"
+        - "{{ media_root }}/music"
+        - "{{ media_root }}/photos"
+        - "{{ media_root }}/downloads"
+        - "{{ media_root }}/documents"
+
+    # Jellyfin - Media Server (lighter than Plex for RPi)
+    - name: Deploy Jellyfin
+      when: deploy_jellyfin | bool
+      block:
+        - name: Create Jellyfin directories
+          file:
+            path: "{{ item }}"
+            state: directory
+            owner: 1000
+            group: 1000
+            mode: '0755'
+          loop:
+            - "{{ stack_data_root }}/jellyfin"
+            - "{{ stack_data_root }}/jellyfin/config"
+            - "{{ stack_data_root }}/jellyfin/cache"
+
+        - name: Deploy Jellyfin container
+          docker_container:
+            name: jellyfin
+            image: jellyfin/jellyfin:latest
+            state: started
+            restart_policy: unless-stopped
+            ports:
+              - "8096:8096"
+              - "8920:8920"
+              - "7359:7359/udp"
+              - "1900:1900/udp"
+            env:
+              PUID: "1000"
+              PGID: "1000"
+              TZ: "{{ timezone | default('UTC') }}"
+              JELLYFIN_PublishedServerUrl: "http://{{ ansible_host }}"
+            volumes:
+              - "{{ stack_data_root }}/jellyfin/config:/config"
+              - "{{ stack_data_root }}/jellyfin/cache:/cache"
+              - "{{ media_root }}/movies:/media/movies"
+              - "{{ media_root }}/tv:/media/tvshows"
+              - "{{ media_root }}/music:/media/music"
+              - "{{ media_root }}/photos:/media/photos"
+            devices:
+              - "/dev/vchiq:/dev/vchiq"
+              - "/dev/video10:/dev/video10"
+              - "/dev/video11:/dev/video11"
+              - "/dev/video12:/dev/video12"
+            networks:
+              - name: docker_network
+            labels:
+              com.dockerizathinginator.managed: "true"
+              com.dockerizathinginator.stack: "media"
+              com.dockerizathinginator.service: "jellyfin"
+
+        - name: Save Jellyfin access info
+          copy:
+            content: |
+              Jellyfin Media Server
+              =====================
+              URL: http://{{ ansible_host }}:8096
+              
+              Complete the setup wizard on first access.
+              Media directories are pre-configured at:
+              - Movies: /media/movies
+              - TV Shows: /media/tvshows
+              - Music: /media/music
+              - Photos: /media/photos
+            dest: "{{ stack_config_root }}/jellyfin-info.txt"
+            owner: root
+            group: root
+            mode: '0644'
+
+    # Plex - Media Server
+    - name: Deploy Plex
+      when: deploy_plex | bool
+      block:
+        - name: Create Plex directories
+          file:
+            path: "{{ item }}"
+            state: directory
+            owner: 1000
+            group: 1000
+            mode: '0755'
+          loop:
+            - "{{ stack_data_root }}/plex"
+            - "{{ stack_data_root }}/plex/config"
+            - "{{ stack_data_root }}/plex/transcode"
+
+        - name: Deploy Plex container
+          docker_container:
+            name: plex
+            image: linuxserver/plex:latest
+            state: started
+            restart_policy: unless-stopped
+            network_mode: host
+            env:
+              PUID: "1000"
+              PGID: "1000"
+              VERSION: "docker"
+              TZ: "{{ timezone | default('UTC') }}"
+            volumes:
+              - "{{ stack_data_root }}/plex/config:/config"
+              - "{{ stack_data_root }}/plex/transcode:/transcode"
+              - "{{ media_root }}/movies:/media/movies"
+              - "{{ media_root }}/tv:/media/tvshows"
+              - "{{ media_root }}/music:/media/music"
+              - "{{ media_root }}/photos:/media/photos"
+            devices:
+              - "/dev/vchiq:/dev/vchiq"
+            labels:
+              com.dockerizathinginator.managed: "true"
+              com.dockerizathinginator.stack: "media"
+              com.dockerizathinginator.service: "plex"
+
+    # NextCloud - Personal Cloud Storage
+    - name: Deploy NextCloud
+      when: deploy_nextcloud | bool
+      block:
+        - name: Create NextCloud directories
+          file:
+            path: "{{ item }}"
+            state: directory
+            owner: www-data
+            group: www-data
+            mode: '0755'
+          loop:
+            - "{{ stack_data_root }}/nextcloud"
+            - "{{ stack_data_root }}/nextcloud/data"
+            - "{{ stack_data_root }}/nextcloud/config"
+            - "{{ stack_data_root }}/nextcloud/apps"
+
+        - name: Generate NextCloud admin password
+          set_fact:
+            nextcloud_admin_password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=16') }}"
+
+        - name: Deploy MariaDB for NextCloud
+          docker_container:
+            name: nextcloud-db
+            image: mariadb:10.11
+            state: started
+            restart_policy: unless-stopped
+            env:
+              MYSQL_ROOT_PASSWORD: "{{ nextcloud_admin_password }}"
+              MYSQL_DATABASE: "nextcloud"
+              MYSQL_USER: "nextcloud"
+              MYSQL_PASSWORD: "{{ nextcloud_admin_password }}"
+            volumes:
+              - "{{ stack_data_root }}/nextcloud/db:/var/lib/mysql"
+            networks:
+              - name: docker_network
+            labels:
+              com.dockerizathinginator.managed: "true"
+              com.dockerizathinginator.stack: "media"
+              com.dockerizathinginator.service: "nextcloud-db"
+
+        - name: Wait for MariaDB to be ready
+          pause:
+            seconds: 10
+
+        - name: Deploy NextCloud container
+          docker_container:
+            name: nextcloud
+            image: nextcloud:stable
+            state: started
+            restart_policy: unless-stopped
+            ports:
+              - "8080:80"
+            env:
+              MYSQL_HOST: "nextcloud-db"
+              MYSQL_DATABASE: "nextcloud"
+              MYSQL_USER: "nextcloud"
+              MYSQL_PASSWORD: "{{ nextcloud_admin_password }}"
+              NEXTCLOUD_ADMIN_USER: "admin"
+              NEXTCLOUD_ADMIN_PASSWORD: "{{ nextcloud_admin_password }}"
+              NEXTCLOUD_TRUSTED_DOMAINS: "{{ ansible_host }}"
+              OVERWRITEPROTOCOL: "http"
+              OVERWRITEHOST: "{{ ansible_host }}:8080"
+            volumes:
+              - "{{ stack_data_root }}/nextcloud/data:/var/www/html/data"
+              - "{{ stack_data_root }}/nextcloud/config:/var/www/html/config"
+              - "{{ stack_data_root }}/nextcloud/apps:/var/www/html/apps"
+              - "{{ media_root }}/documents:/var/www/html/data/admin/files/Documents"
+              - "{{ media_root }}/photos:/var/www/html/data/admin/files/Photos"
+            networks:
+              - name: docker_network
+            labels:
+              com.dockerizathinginator.managed: "true"
+              com.dockerizathinginator.stack: "media"
+              com.dockerizathinginator.service: "nextcloud"
+
+        - name: Save NextCloud credentials
+          copy:
+            content: |
+              NextCloud Admin Credentials
+              ===========================
+              URL: http://{{ ansible_host }}:8080
+              Username: admin
+              Password: {{ nextcloud_admin_password }}
+              
+              Database Password: {{ nextcloud_admin_password }}
+            dest: "{{ stack_config_root }}/nextcloud-credentials.txt"
+            owner: root
+            group: root
+            mode: '0600'
+
+    # Transmission - BitTorrent Client
+    - name: Deploy Transmission
+      when: deploy_transmission | bool
+      block:
+        - name: Create Transmission directories
+          file:
+            path: "{{ item }}"
+            state: directory
+            owner: 1000
+            group: 1000
+            mode: '0755'
+          loop:
+            - "{{ stack_data_root }}/transmission"
+            - "{{ stack_data_root }}/transmission/config"
+            - "{{ stack_data_root }}/transmission/watch"
+
+        - name: Deploy Transmission container
+          docker_container:
+            name: transmission
+            image: linuxserver/transmission:latest
+            state: started
+            restart_policy: unless-stopped
+            ports:
+              - "9091:9091"
+              - "51413:51413"
+              - "51413:51413/udp"
+            env:
+              PUID: "1000"
+              PGID: "1000"
+              TZ: "{{ timezone | default('UTC') }}"
+              USER: "admin"
+              PASS: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=16') }}"
+            volumes:
+              - "{{ stack_data_root }}/transmission/config:/config"
+              - "{{ stack_data_root }}/transmission/watch:/watch"
+              - "{{ media_root }}/downloads:/downloads"
+            networks:
+              - name: docker_network
+            labels:
+              com.dockerizathinginator.managed: "true"
+              com.dockerizathinginator.stack: "media"
+              com.dockerizathinginator.service: "transmission"
+
+    # Sonarr - TV Show Management
+    - name: Deploy Sonarr
+      when: deploy_sonarr | bool
+      block:
+        - name: Create Sonarr directories
+          file:
+            path: "{{ stack_data_root }}/sonarr"
+            state: directory
+            owner: 1000
+            group: 1000
+            mode: '0755'
+
+        - name: Deploy Sonarr container
+          docker_container:
+            name: sonarr
+            image: linuxserver/sonarr:latest
+            state: started
+            restart_policy: unless-stopped
+            ports:
+              - "8989:8989"
+            env:
+              PUID: "1000"
+              PGID: "1000"
+              TZ: "{{ timezone | default('UTC') }}"
+            volumes:
+              - "{{ stack_data_root }}/sonarr:/config"
+              - "{{ media_root }}/tv:/tv"
+              - "{{ media_root }}/downloads:/downloads"
+            networks:
+              - name: docker_network
+            labels:
+              com.dockerizathinginator.managed: "true"
+              com.dockerizathinginator.stack: "media"
+              com.dockerizathinginator.service: "sonarr"
+
+    # Radarr - Movie Management
+    - name: Deploy Radarr
+      when: deploy_radarr | bool
+      block:
+        - name: Create Radarr directories
+          file:
+            path: "{{ stack_data_root }}/radarr"
+            state: directory
+            owner: 1000
+            group: 1000
+            mode: '0755'
+
+        - name: Deploy Radarr container
+          docker_container:
+            name: radarr
+            image: linuxserver/radarr:latest
+            state: started
+            restart_policy: unless-stopped
+            ports:
+              - "7878:7878"
+            env:
+              PUID: "1000"
+              PGID: "1000"
+              TZ: "{{ timezone | default('UTC') }}"
+            volumes:
+              - "{{ stack_data_root }}/radarr:/config"
+              - "{{ media_root }}/movies:/movies"
+              - "{{ media_root }}/downloads:/downloads"
+            networks:
+              - name: docker_network
+            labels:
+              com.dockerizathinginator.managed: "true"
+              com.dockerizathinginator.stack: "media"
+              com.dockerizathinginator.service: "radarr"
+
+    # Jackett - Torrent Indexer Proxy
+    - name: Deploy Jackett
+      when: deploy_jackett | bool
+      block:
+        - name: Create Jackett directories
+          file:
+            path: "{{ stack_data_root }}/jackett"
+            state: directory
+            owner: 1000
+            group: 1000
+            mode: '0755'
+
+        - name: Deploy Jackett container
+          docker_container:
+            name: jackett
+            image: linuxserver/jackett:latest
+            state: started
+            restart_policy: unless-stopped
+            ports:
+              - "9117:9117"
+            env:
+              PUID: "1000"
+              PGID: "1000"
+              TZ: "{{ timezone | default('UTC') }}"
+              AUTO_UPDATE: "true"
+            volumes:
+              - "{{ stack_data_root }}/jackett:/config"
+              - "{{ media_root }}/downloads:/downloads"
+            networks:
+              - name: docker_network
+            labels:
+              com.dockerizathinginator.managed: "true"
+              com.dockerizathinginator.stack: "media"
+              com.dockerizathinginator.service: "jackett"
+
+    - name: Display media stack deployment summary
+      debug:
+        msg:
+          - "Media Stack Deployment Complete!"
+          - "Deployed services:"
+          - "{% if deploy_jellyfin %}Jellyfin: http://{{ ansible_host }}:8096{% endif %}"
+          - "{% if deploy_plex %}Plex: http://{{ ansible_host }}:32400/web{% endif %}"
+          - "{% if deploy_nextcloud %}NextCloud: http://{{ ansible_host }}:8080{% endif %}"
+          - "{% if deploy_transmission %}Transmission: http://{{ ansible_host }}:9091{% endif %}"
+          - "{% if deploy_sonarr %}Sonarr: http://{{ ansible_host }}:8989{% endif %}"
+          - "{% if deploy_radarr %}Radarr: http://{{ ansible_host }}:7878{% endif %}"
+          - "{% if deploy_jackett %}Jackett: http://{{ ansible_host }}:9117{% endif %}"
+          - "Credentials saved in: {{ stack_config_root }}/"
+          - "Media directories: {{ media_root }}/"

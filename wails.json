@@ -1,0 +1,25 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "dockerizathinginator",
+  "outputfilename": "dockerizathinginator",
+  "frontend": {
+    "dir": "frontend",
+    "install": "",
+    "build": "",
+    "dev": {
+      "serverUrl": "auto",
+      "url": "http://localhost:5173"
+    }
+  },
+  "author": {
+    "name": "b34rdtek",
+    "email": ""
+  },
+  "info": {
+    "companyName": "dockerizathinginator",
+    "productName": "Dockerizathinginator",
+    "productVersion": "2.0.0",
+    "copyright": "Copyright (c) 2024 b34rdtek",
+    "comments": "Raspberry Pi Docker automation tool"
+  }
+}
