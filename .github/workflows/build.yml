@@ -96,8 +96,14 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           
-          (sudo apt-get install -y build-essential pkg-config libwebkit2gtk-4.1-dev) || \
-          sudo apt-get install -y build-essential pkg-config libwebkit2gtk-4.0-dev
+          # Try to install libwebkit2gtk-4.1-dev, fall back to 4.0-dev if not available, fail otherwise
+          if ! sudo apt-get install -y build-essential pkg-config libwebkit2gtk-4.1-dev; then
+            echo "libwebkit2gtk-4.1-dev not available, trying libwebkit2gtk-4.0-dev..."
+            if ! sudo apt-get install -y build-essential pkg-config libwebkit2gtk-4.0-dev; then
+              echo "ERROR: Failed to install either libwebkit2gtk-4.1-dev or libwebkit2gtk-4.0-dev" >&2
+              exit 1
+            fi
+          fi
           go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
           
       - name: Install Wails (macOS)
