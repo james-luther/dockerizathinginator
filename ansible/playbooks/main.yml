@@ -1,0 +1,152 @@
+---
+# Main orchestration playbook for dockerizathinginator
+- name: Complete Raspberry Pi Docker Setup
+  hosts: raspberrypi
+  gather_facts: yes
+  become: yes
+  vars:
+    # Default configuration - override with extra-vars or inventory
+    volume_path: "/mnt/docker"
+    storage_type: "usb"
+    enable_log2ram: true
+    timezone: "UTC"
+    
+    # Stack deployment flags
+    deploy_portainer: true
+    deploy_network_stack: false
+    deploy_iot_stack: false
+    deploy_media_stack: false
+    
+    # Component flags (can be overridden)
+    skip_update: false
+    skip_docker: false
+    skip_storage: false
+
+  pre_tasks:
+    - name: Verify Raspberry Pi model
+      command: cat /proc/device-tree/model
+      register: pi_model
+      changed_when: false
+      
+    - name: Display detected Raspberry Pi model
+      debug:
+        msg: "Detected: {{ pi_model.stdout }}"
+        
+    - name: Verify sufficient disk space
+      shell: df -h / | awk 'NR==2 {print $4}' | sed 's/G//'
+      register: disk_space
+      changed_when: false
+      
+    - name: Check available memory
+      shell: free -m | awk 'NR==2 {print $2}'
+      register: memory_total
+      changed_when: false
+      
+    - name: System requirements check
+      assert:
+        that:
+          - disk_space.stdout | int > 2
+          - memory_total.stdout | int >= 1024
+        fail_msg: "Insufficient resources. Need at least 2GB free disk space and 1GB RAM."
+        success_msg: "System requirements met: {{ disk_space.stdout }}GB free disk, {{ memory_total.stdout }}MB RAM"
+
+    - name: Create backup of important configs
+      archive:
+        path:
+          - /etc/fstab
+          - /etc/docker
+        dest: "/tmp/config-backup-{{ ansible_date_time.epoch }}.tar.gz"
+        format: gz
+      ignore_errors: yes
+
+  tasks:
+    - name: System Update Phase
+      when: not skip_update | bool
+      block:
+        - name: Update Raspberry Pi OS
+          apt:
+            update_cache: yes
+            upgrade: dist
+            cache_valid_time: 3600
+          register: update_result
+          
+        - name: Display update summary
+          debug:
+            msg: "System updated successfully. {{ update_result.changed | ternary('Updates were applied.', 'System was already up-to-date.') }}"
+
+    - name: Docker Installation Phase
+      when: not skip_docker | bool
+      import_playbook: install-docker.yml
+
+    - name: Storage Configuration Phase
+      when: not skip_storage | bool
+      import_playbook: configure-storage.yml
+
+    - name: Portainer Deployment Phase
+      when: deploy_portainer | bool
+      import_playbook: deploy-portainer.yml
+
+    - name: Network Stack Deployment Phase
+      when: deploy_network_stack | bool
+      import_playbook: deploy-network-stack.yml
+
+    - name: IoT Stack Deployment Phase
+      when: deploy_iot_stack | bool
+      import_playbook: deploy-iot-stack.yml
+
+    - name: Media Stack Deployment Phase
+      when: deploy_media_stack | bool
+      import_playbook: deploy-media-stack.yml
+
+  post_tasks:
+    - name: Clean up package cache
+      apt:
+        autoclean: yes
+        autoremove: yes
+      
+    - name: Collect deployed services
+      shell: docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+      register: docker_services
+      changed_when: false
+      
+    - name: Generate deployment summary
+      set_fact:
+        deployment_summary:
+          - "======================================"
+          - "Deployment Complete!"
+          - "======================================"
+          - "Raspberry Pi Model: {{ pi_model.stdout }}"
+          - "Storage Path: {{ volume_path }}"
+          - "Storage Type: {{ storage_type }}"
+          - ""
+          - "Deployed Services:"
+          - "{{ docker_services.stdout }}"
+          - ""
+          - "Access Points:"
+          - "{% if deploy_portainer %}Portainer: http://{{ ansible_host }}:9000{% endif %}"
+          - "{% if deploy_network_stack %}Network Stack Services - check {{ volume_path }}/config/ for credentials{% endif %}"
+          - "{% if deploy_iot_stack %}IoT Stack Services - check {{ volume_path }}/config/ for credentials{% endif %}"
+          - "{% if deploy_media_stack %}Media Stack Services - check {{ volume_path }}/config/ for credentials{% endif %}"
+          - ""
+          - "Configuration and credentials saved in: {{ volume_path }}/config/"
+          - "======================================"
+          
+    - name: Display deployment summary
+      debug:
+        msg: "{{ deployment_summary }}"
+        
+    - name: Save deployment summary to file
+      copy:
+        content: "{{ deployment_summary | join('\n') }}"
+        dest: "{{ volume_path }}/deployment-summary-{{ ansible_date_time.epoch }}.txt"
+        mode: '0644'
+        
+    - name: Check if reboot is required
+      stat:
+        path: /var/run/reboot-required
+      register: reboot_required
+      
+    - name: Notify if reboot is needed
+      debug:
+        msg: "IMPORTANT: A reboot is required to complete the installation. Run 'sudo reboot' when ready."
+      when: reboot_required.stat.exists

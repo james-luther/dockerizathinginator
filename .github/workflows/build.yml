@@ -1,0 +1,206 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run monthly on the 1st at 2 AM UTC
+    - cron: '0 2 1 * *'
+  workflow_dispatch:
+
+env:
+  GO_VERSION: '1.22'
+  WAILS_VERSION: 'v2.10.2'
+  
+jobs:
+  check-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.changes.outputs.should_build }}
+      version: ${{ steps.version.outputs.version }}
+      is_release: ${{ steps.version.outputs.is_release }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Check for changes since last release
+        id: changes
+        run: |
+          # For scheduled builds, check if there are changes since last release
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            LAST_RELEASE=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+            if [ -z "$LAST_RELEASE" ]; then
+              echo "No previous release found, proceeding with build"
+              echo "should_build=true" >> $GITHUB_OUTPUT
+            else
+              CHANGES=$(git rev-list $LAST_RELEASE..HEAD --count)
+              if [ "$CHANGES" -gt 0 ]; then
+                echo "Found $CHANGES changes since last release, proceeding with build"
+                echo "should_build=true" >> $GITHUB_OUTPUT
+              else
+                echo "No changes since last release, skipping build"
+                echo "should_build=false" >> $GITHUB_OUTPUT
+              fi
+            fi
+          else
+            # For push/PR events, always build
+            echo "should_build=true" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Generate version
+        id: version
+        run: |
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+            echo "is_release=true" >> $GITHUB_OUTPUT
+          else
+            # Generate version based on commit hash and date for non-release builds
+            VERSION="v$(date +'%Y.%m.%d')-${GITHUB_SHA:0:7}"
+            echo "is_release=false" >> $GITHUB_OUTPUT
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Generated version: $VERSION"
+
+  build:
+    needs: check-changes
+    if: needs.check-changes.outputs.should_build == 'true'
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+            arch: amd64
+            extension: .exe
+          - os: macos-latest
+            platform: darwin
+            arch: amd64
+          - os: macos-latest
+            platform: darwin
+            arch: arm64
+          - os: ubuntu-latest
+            platform: linux
+            arch: amd64
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          
+      - name: Install Wails (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libwebkit2gtk-4.0-dev
+          go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+          
+      - name: Install Wails (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+          
+      - name: Install Wails (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+          
+      - name: Build application
+        env:
+          CGO_ENABLED: 1
+        run: |
+          if [ "${{ matrix.platform }}" = "darwin" ] && [ "${{ matrix.arch }}" = "arm64" ]; then
+            export GOARCH=arm64
+            export CGO_ENABLED=1
+          fi
+          wails build -platform ${{ matrix.platform }}/${{ matrix.arch }} -clean
+        shell: bash
+        
+      - name: Prepare artifacts
+        run: |
+          mkdir -p dist
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            cp build/bin/dockerizathinginator.exe dist/dockerizathinginator-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.extension }}
+          else
+            cp build/bin/dockerizathinginator dist/dockerizathinginator-${{ matrix.platform }}-${{ matrix.arch }}
+          fi
+          
+          # Copy Ansible playbooks
+          cp -r ansible dist/
+          
+          # Create archive
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            7z a dist/dockerizathinginator-${{ matrix.platform }}-${{ matrix.arch }}.zip dist/dockerizathinginator-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.extension }} dist/ansible
+          else
+            tar -czf dist/dockerizathinginator-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz -C dist dockerizathinginator-${{ matrix.platform }}-${{ matrix.arch }} ansible
+          fi
+        shell: bash
+        
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dockerizathinginator-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            dist/dockerizathinginator-${{ matrix.platform }}-${{ matrix.arch }}*
+            dist/ansible/
+          retention-days: 90
+
+  release:
+    needs: [check-changes, build]
+    if: needs.check-changes.outputs.is_release == 'true' && needs.check-changes.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          find artifacts -name "*.tar.gz" -o -name "*.zip" | while read file; do
+            cp "$file" release-assets/
+          done
+          ls -la release-assets/
+          
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.check-changes.outputs.version }}
+          name: Release ${{ needs.check-changes.outputs.version }}
+          draft: false
+          prerelease: false
+          files: release-assets/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  package-upload:
+    needs: [check-changes, build]
+    if: needs.check-changes.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          
+      - name: Upload to GitHub Packages
+        run: |
+          echo "Uploading packages with version: ${{ needs.check-changes.outputs.version }}"
+          # Note: This would typically use docker/build-push-action or similar
+          # for actual package registry uploads. For now, artifacts are stored as build artifacts.
+          find artifacts -type f -name "*.tar.gz" -o -name "*.zip" | while read file; do
+            echo "Would upload: $file"
+          done

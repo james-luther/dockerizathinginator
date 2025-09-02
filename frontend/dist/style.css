@@ -1,0 +1,288 @@
+/* Custom styles for Dockerizathinginator */
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+}
+
+/* Loading spinner animation */
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+
+/* Sidebar enhancements */
+.sidebar-icon {
+    transition: background-color 0.2s ease;
+}
+
+.sidebar-icon:hover {
+    background-color: #374151 !important;
+}
+
+.sidebar-icon.active {
+    background-color: #1f2937 !important;
+}
+
+/* Form styling improvements */
+.form-input {
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-input:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Button enhancements */
+button {
+    transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+button:hover {
+    transform: translateY(-1px);
+}
+
+button:active {
+    transform: translateY(0);
+}
+
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Alert styles */
+.alert {
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin: 0.5rem 0;
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.alert-success {
+    background-color: #10b981;
+    color: white;
+}
+
+.alert-error {
+    background-color: #ef4444;
+    color: white;
+}
+
+.alert-info {
+    background-color: #3b82f6;
+    color: white;
+}
+
+/* Modal backdrop */
+.modal-backdrop {
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
+}
+
+/* Ansible output styling */
+#ansibleOutput {
+    background-color: #000;
+    color: #00ff00;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    height: 24rem;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+#ansibleOutput::-webkit-scrollbar {
+    width: 8px;
+}
+
+#ansibleOutput::-webkit-scrollbar-track {
+    background: #1f2937;
+}
+
+#ansibleOutput::-webkit-scrollbar-thumb {
+    background: #4b5563;
+    border-radius: 4px;
+}
+
+#ansibleOutput::-webkit-scrollbar-thumb:hover {
+    background: #6b7280;
+}
+
+/* Progress indicators */
+.progress-bar {
+    width: 100%;
+    height: 4px;
+    background-color: #e5e7eb;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background-color: #3b82f6;
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+
+/* Status indicators */
+.status-indicator {
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    margin-right: 0.5rem;
+}
+
+.status-indicator.success {
+    background-color: #10b981;
+}
+
+.status-indicator.error {
+    background-color: #ef4444;
+}
+
+.status-indicator.warning {
+    background-color: #f59e0b;
+}
+
+.status-indicator.info {
+    background-color: #3b82f6;
+}
+
+/* Container selection styling */
+.container-card {
+    background-color: #374151;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin: 0.5rem;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+    cursor: pointer;
+}
+
+.container-card:hover {
+    background-color: #4b5563;
+    transform: translateY(-1px);
+}
+
+.container-card.selected {
+    background-color: #1d4ed8;
+    color: white;
+}
+
+/* Stack selection styling */
+.stack-selector {
+    background-color: #374151;
+    border: 1px solid #6b7280;
+    color: #f9fafb;
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    width: 100%;
+    appearance: none;
+    cursor: pointer;
+}
+
+.stack-selector:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Table styling */
+.container-table {
+    width: 100%;
+    background-color: #374151;
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.container-table th {
+    background-color: #1f2937;
+    color: #f9fafb;
+    padding: 1rem;
+    text-align: left;
+    font-weight: 600;
+}
+
+.container-table td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #4b5563;
+    color: #d1d5db;
+}
+
+.container-table tr:last-child td {
+    border-bottom: none;
+}
+
+/* Responsive design */
+@media (max-width: 1024px) {
+    .sidebar {
+        width: 4rem;
+    }
+    
+    .sidebar .text-white {
+        display: none;
+    }
+    
+    .main-content {
+        margin-left: 4rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .sidebar {
+        position: fixed;
+        top: 0;
+        left: -14rem;
+        transition: left 0.3s ease;
+        z-index: 50;
+    }
+    
+    .sidebar.open {
+        left: 0;
+    }
+    
+    .main-content {
+        margin-left: 0;
+        padding: 1rem;
+    }
+}
+
+/* Dark mode refinements */
+.bg-darker {
+    background-color: #0f172a;
+}
+
+.text-lighter {
+    color: #e2e8f0;
+}
+
+/* Focus visible for accessibility */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}

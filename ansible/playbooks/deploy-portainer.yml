@@ -1,0 +1,117 @@
+---
+- name: Deploy Portainer on Raspberry Pi
+  hosts: raspberrypi
+  become: yes
+  vars:
+    portainer_data_volume: "{{ volume_path | default('/mnt/docker') }}/portainer"
+    portainer_version: "latest"
+    portainer_http_port: 9000
+    portainer_https_port: 9443
+    portainer_edge_port: 8000
+
+  tasks:
+    - name: Ensure Docker is installed
+      command: docker --version
+      register: docker_check
+      failed_when: docker_check.rc != 0
+      changed_when: false
+
+    - name: Create Portainer data directory
+      file:
+        path: "{{ portainer_data_volume }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Pull Portainer image
+      docker_image:
+        name: "portainer/portainer-ce:{{ portainer_version }}"
+        source: pull
+        state: present
+
+    - name: Check if Portainer container exists
+      docker_container_info:
+        name: portainer
+      register: portainer_container
+
+    - name: Remove existing Portainer container if exists
+      docker_container:
+        name: portainer
+        state: absent
+      when: portainer_container.exists
+
+    - name: Deploy Portainer container
+      docker_container:
+        name: portainer
+        image: "portainer/portainer-ce:{{ portainer_version }}"
+        state: started
+        restart_policy: always
+        ports:
+          - "{{ portainer_edge_port }}:8000"
+          - "{{ portainer_http_port }}:9000"
+          - "{{ portainer_https_port }}:9443"
+        volumes:
+          - /var/run/docker.sock:/var/run/docker.sock:ro
+          - "{{ portainer_data_volume }}:/data"
+        networks:
+          - name: docker_network
+        command: --admin-password-file /data/admin-password
+        labels:
+          com.dockerizathinginator.managed: "true"
+          com.dockerizathinginator.service: "portainer"
+
+    - name: Generate admin password if not exists
+      block:
+        - name: Check if admin password file exists
+          stat:
+            path: "{{ portainer_data_volume }}/admin-password"
+          register: admin_password_file
+
+        - name: Generate random admin password
+          set_fact:
+            portainer_admin_password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=16') }}"
+          when: not admin_password_file.stat.exists
+
+        - name: Create admin password file
+          copy:
+            content: "{{ portainer_admin_password }}"
+            dest: "{{ portainer_data_volume }}/admin-password"
+            owner: root
+            group: root
+            mode: '0600'
+          when: not admin_password_file.stat.exists
+
+        - name: Save password for reference
+          copy:
+            content: |
+              Portainer Admin Credentials
+              ===========================
+              URL: http://{{ ansible_host }}:{{ portainer_http_port }}
+              Username: admin
+              Password: {{ portainer_admin_password }}
+              
+              Please change this password after first login!
+            dest: "{{ portainer_data_volume }}/credentials.txt"
+            owner: root
+            group: root
+            mode: '0600'
+          when: not admin_password_file.stat.exists
+
+    - name: Wait for Portainer to be ready
+      uri:
+        url: "http://localhost:{{ portainer_http_port }}/api/status"
+        status_code: 200
+      register: result
+      until: result.status == 200
+      retries: 30
+      delay: 2
+
+    - name: Display Portainer access information
+      debug:
+        msg:
+          - "Portainer has been successfully deployed!"
+          - "Access URL: http://{{ ansible_host }}:{{ portainer_http_port }}"
+          - "Edge Agent Port: {{ portainer_edge_port }}"
+          - "HTTPS Port: {{ portainer_https_port }}"
+          - "Credentials are stored in: {{ portainer_data_volume }}/credentials.txt"

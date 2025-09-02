@@ -1,0 +1,266 @@
+---
+- name: Deploy Network Stack on Raspberry Pi
+  hosts: raspberrypi
+  become: yes
+  vars:
+    stack_data_root: "{{ volume_path | default('/mnt/docker') }}/data"
+    stack_config_root: "{{ volume_path | default('/mnt/docker') }}/config"
+    deploy_pihole: true
+    deploy_unifi: false
+    deploy_nginx_proxy: true
+    deploy_heimdall: true
+    deploy_wireguard: false
+
+  tasks:
+    - name: Ensure Docker network exists
+      docker_network:
+        name: docker_network
+        driver: bridge
+
+    - name: Create directories for network stack
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      loop:
+        - "{{ stack_data_root }}"
+        - "{{ stack_config_root }}"
+
+    # Pi-hole - Network-wide Ad Blocking
+    - name: Deploy Pi-hole
+      when: deploy_pihole | bool
+      block:
+        - name: Create Pi-hole directories
+          file:
+            path: "{{ item }}"
+            state: directory
+            owner: 999
+            group: 999
+            mode: '0755'
+          loop:
+            - "{{ stack_data_root }}/pihole"
+            - "{{ stack_data_root }}/pihole/etc-pihole"
+            - "{{ stack_data_root }}/pihole/etc-dnsmasq.d"
+
+        - name: Generate Pi-hole web password
+          set_fact:
+            pihole_password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=16') }}"
+
+        - name: Deploy Pi-hole container
+          docker_container:
+            name: pihole
+            image: pihole/pihole:latest
+            state: started
+            restart_policy: unless-stopped
+            network_mode: host
+            capabilities:
+              - NET_ADMIN
+            env:
+              TZ: "{{ timezone | default('UTC') }}"
+              WEBPASSWORD: "{{ pihole_password }}"
+              INTERFACE: "{{ ansible_default_ipv4.interface }}"
+              DNSMASQ_LISTENING: "all"
+              PIHOLE_DNS_: "1.1.1.1;1.0.0.1"
+              DNSSEC: "true"
+              CONDITIONAL_FORWARDING: "true"
+            volumes:
+              - "{{ stack_data_root }}/pihole/etc-pihole:/etc/pihole"
+              - "{{ stack_data_root }}/pihole/etc-dnsmasq.d:/etc/dnsmasq.d"
+            labels:
+              com.dockerizathinginator.managed: "true"
+              com.dockerizathinginator.stack: "network"
+              com.dockerizathinginator.service: "pihole"
+
+        - name: Save Pi-hole credentials
+          copy:
+            content: |
+              Pi-hole Admin Credentials
+              =========================
+              URL: http://{{ ansible_host }}/admin
+              Password: {{ pihole_password }}
+            dest: "{{ stack_config_root }}/pihole-credentials.txt"
+            owner: root
+            group: root
+            mode: '0600'
+
+    # Nginx Proxy Manager
+    - name: Deploy Nginx Proxy Manager
+      when: deploy_nginx_proxy | bool
+      block:
+        - name: Create Nginx Proxy Manager directories
+          file:
+            path: "{{ item }}"
+            state: directory
+            owner: root
+            group: root
+            mode: '0755'
+          loop:
+            - "{{ stack_data_root }}/nginx-proxy-manager"
+            - "{{ stack_data_root }}/nginx-proxy-manager/data"
+            - "{{ stack_data_root }}/nginx-proxy-manager/letsencrypt"
+
+        - name: Deploy Nginx Proxy Manager container
+          docker_container:
+            name: nginx-proxy-manager
+            image: jc21/nginx-proxy-manager:latest
+            state: started
+            restart_policy: unless-stopped
+            ports:
+              - "80:80"
+              - "443:443"
+              - "81:81"
+            env:
+              DB_SQLITE_FILE: "/data/database.sqlite"
+              DISABLE_IPV6: "true"
+            volumes:
+              - "{{ stack_data_root }}/nginx-proxy-manager/data:/data"
+              - "{{ stack_data_root }}/nginx-proxy-manager/letsencrypt:/etc/letsencrypt"
+            networks:
+              - name: docker_network
+            labels:
+              com.dockerizathinginator.managed: "true"
+              com.dockerizathinginator.stack: "network"
+              com.dockerizathinginator.service: "nginx-proxy-manager"
+
+        - name: Save Nginx Proxy Manager default credentials
+          copy:
+            content: |
+              Nginx Proxy Manager Default Credentials
+              =======================================
+              URL: http://{{ ansible_host }}:81
+              Email: admin@example.com
+              Password: changeme
+              
+              Please change these credentials on first login!
+            dest: "{{ stack_config_root }}/nginx-proxy-manager-credentials.txt"
+            owner: root
+            group: root
+            mode: '0600'
+
+    # UniFi Controller
+    - name: Deploy UniFi Controller
+      when: deploy_unifi | bool
+      block:
+        - name: Create UniFi directories
+          file:
+            path: "{{ stack_data_root }}/unifi"
+            state: directory
+            owner: 999
+            group: 999
+            mode: '0755'
+
+        - name: Deploy UniFi Controller container
+          docker_container:
+            name: unifi-controller
+            image: linuxserver/unifi-controller:latest
+            state: started
+            restart_policy: unless-stopped
+            ports:
+              - "8443:8443"
+              - "3478:3478/udp"
+              - "10001:10001/udp"
+              - "8080:8080"
+              - "6789:6789"
+            env:
+              PUID: "1000"
+              PGID: "1000"
+              MEM_LIMIT: "1024"
+              MEM_STARTUP: "1024"
+            volumes:
+              - "{{ stack_data_root }}/unifi:/config"
+            networks:
+              - name: docker_network
+            labels:
+              com.dockerizathinginator.managed: "true"
+              com.dockerizathinginator.stack: "network"
+              com.dockerizathinginator.service: "unifi"
+
+    # Heimdall - Application Dashboard
+    - name: Deploy Heimdall
+      when: deploy_heimdall | bool
+      block:
+        - name: Create Heimdall directories
+          file:
+            path: "{{ stack_data_root }}/heimdall"
+            state: directory
+            owner: 1000
+            group: 1000
+            mode: '0755'
+
+        - name: Deploy Heimdall container
+          docker_container:
+            name: heimdall
+            image: linuxserver/heimdall:latest
+            state: started
+            restart_policy: unless-stopped
+            ports:
+              - "8090:80"
+              - "8453:443"
+            env:
+              PUID: "1000"
+              PGID: "1000"
+              TZ: "{{ timezone | default('UTC') }}"
+            volumes:
+              - "{{ stack_data_root }}/heimdall:/config"
+            networks:
+              - name: docker_network
+            labels:
+              com.dockerizathinginator.managed: "true"
+              com.dockerizathinginator.stack: "network"
+              com.dockerizathinginator.service: "heimdall"
+
+    # WireGuard VPN
+    - name: Deploy WireGuard
+      when: deploy_wireguard | bool
+      block:
+        - name: Create WireGuard directories
+          file:
+            path: "{{ stack_data_root }}/wireguard"
+            state: directory
+            owner: root
+            group: root
+            mode: '0755'
+
+        - name: Deploy WireGuard container
+          docker_container:
+            name: wireguard
+            image: linuxserver/wireguard:latest
+            state: started
+            restart_policy: unless-stopped
+            network_mode: host
+            capabilities:
+              - NET_ADMIN
+              - SYS_MODULE
+            env:
+              PUID: "1000"
+              PGID: "1000"
+              TZ: "{{ timezone | default('UTC') }}"
+              SERVERURL: "{{ wireguard_serverurl | default(ansible_host) }}"
+              SERVERPORT: "51820"
+              PEERS: "{{ wireguard_peers | default('5') }}"
+              PEERDNS: "{{ wireguard_dns | default('1.1.1.1') }}"
+              INTERNAL_SUBNET: "10.13.13.0"
+              ALLOWEDIPS: "0.0.0.0/0"
+            volumes:
+              - "{{ stack_data_root }}/wireguard:/config"
+              - "/lib/modules:/lib/modules:ro"
+            sysctls:
+              net.ipv4.conf.all.src_valid_mark: 1
+            labels:
+              com.dockerizathinginator.managed: "true"
+              com.dockerizathinginator.stack: "network"
+              com.dockerizathinginator.service: "wireguard"
+
+    - name: Display network stack deployment summary
+      debug:
+        msg:
+          - "Network Stack Deployment Complete!"
+          - "Deployed services:"
+          - "{% if deploy_pihole %}Pi-hole: http://{{ ansible_host }}/admin{% endif %}"
+          - "{% if deploy_nginx_proxy %}Nginx Proxy Manager: http://{{ ansible_host }}:81{% endif %}"
+          - "{% if deploy_heimdall %}Heimdall: http://{{ ansible_host }}:8090{% endif %}"
+          - "{% if deploy_unifi %}UniFi Controller: https://{{ ansible_host }}:8443{% endif %}"
+          - "{% if deploy_wireguard %}WireGuard VPN: Port 51820{% endif %}"
+          - "Credentials saved in: {{ stack_config_root }}/"
