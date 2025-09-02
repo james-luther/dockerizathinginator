@@ -25,8 +25,21 @@ function Get-ValidatedCommand {
     
     try {
         $command = Get-Command $CommandName -ErrorAction Stop
-        # Return full path for security
-        return $command.Source
+        
+        # Verify it's an executable command (Application, ExternalScript, or Cmdlet)
+        if ($command.CommandType -in @('Application', 'ExternalScript', 'Cmdlet')) {
+            # For applications and scripts, return the full path
+            if ($command.Source) {
+                return $command.Source
+            }
+            # For cmdlets, return the name (they don't have a file path)
+            elseif ($command.CommandType -eq 'Cmdlet') {
+                return $command.Name
+            }
+        }
+        
+        Write-Warning "Command '$CommandName' found but is not an executable type: $($command.CommandType)"
+        return $null
     }
     catch {
         return $null

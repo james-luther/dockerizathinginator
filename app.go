@@ -70,6 +70,10 @@ func (a *App) TestSSH(host, user, password string) ConnectionResult {
 		Auth: []ssh.AuthMethod{
 			ssh.Password(password),
 		},
+		// NOTE: Using InsecureIgnoreHostKey() for ease of use in Pi configuration scenarios.
+		// This disables host key verification and could be vulnerable to MITM attacks.
+		// In production environments, consider implementing proper host key verification
+		// or at minimum warn users about connecting only to trusted networks.
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         5 * time.Second,
 	}
@@ -238,15 +242,24 @@ func (a *App) DeployStacks(host, user, password, volumePath string, config Stack
 
 // validatePlaybookName validates that the playbook name is safe to use
 func validatePlaybookName(playbook string) error {
-	// Only allow alphanumeric characters, hyphens, underscores, and .yml extension
-	validPlaybook := regexp.MustCompile(`^[a-zA-Z0-9_-]+\.yml$`)
+	// Tighter validation: alphanumeric start, no consecutive special chars, .yml extension
+	// Pattern breakdown:
+	// ^[a-zA-Z0-9] - must start with alphanumeric
+	// (?:[a-zA-Z0-9]*[_-]?[a-zA-Z0-9]*)* - zero or more groups of alphanumeric with optional single separator
+	// \.yml$ - must end with .yml extension
+	validPlaybook := regexp.MustCompile(`^[a-zA-Z0-9](?:[a-zA-Z0-9]*[_-]?[a-zA-Z0-9]*)*\.yml$`)
 	if !validPlaybook.MatchString(playbook) {
-		return fmt.Errorf("invalid playbook name: %s", playbook)
+		return fmt.Errorf("invalid playbook name: %s (must be alphanumeric with optional single hyphens/underscores, ending in .yml)", playbook)
 	}
 	
-	// Check for path traversal attempts
+	// Additional safety checks for path traversal attempts
 	if strings.Contains(playbook, "..") || strings.Contains(playbook, "/") || strings.Contains(playbook, "\\") {
 		return fmt.Errorf("playbook name contains invalid path characters: %s", playbook)
+	}
+	
+	// Prevent consecutive separators which could be confusing
+	if strings.Contains(playbook, "--") || strings.Contains(playbook, "__") || strings.Contains(playbook, "_-") || strings.Contains(playbook, "-_") {
+		return fmt.Errorf("playbook name contains consecutive separators: %s", playbook)
 	}
 	
 	return nil

@@ -39,13 +39,20 @@
         - name: Prepare USB device
           when: usb_device is defined
           block:
-            - name: Validate USB device name
+            - name: Validate USB device name format
               fail:
-                msg: "Invalid USB device name: {{ usb_device }}. Only USB devices like sdb, sdc, sdd, etc. are allowed (not sda which may be the system disk)."
+                msg: "Invalid USB device name: {{ usb_device }}. Only removable devices are allowed: sdb-sdz (SCSI/SATA), nvme0n1-nvme99n9 (NVMe), mmcblk0-mmcblk9 (SD/MMC). System disk sda and partitions are forbidden."
               when: >
-                usb_device is not match('^sd[b-z]$') and
-                usb_device is not match('^nvme[0-9]+n[0-9]+$') and
-                usb_device is not match('^mmcblk[0-9]+$')
+                not (
+                  (usb_device is match('^sd[b-z]$')) or
+                  (usb_device is match('^nvme[0-9]{1,2}n[1-9]$')) or
+                  (usb_device is match('^mmcblk[0-9]$'))
+                )
+            
+            - name: Explicitly block system disk sda
+              fail:
+                msg: "Device sda is the primary system disk and cannot be used for storage configuration."
+              when: usb_device == "sda" or usb_device is match('^sda[0-9]+$')
             
             - name: Verify device is removable
               shell: |
