@@ -159,13 +159,22 @@ jobs:
           
           # Look for the binary in common Wails output locations
           BINARY_PATH=""
-          for path in "build/bin/$BINARY_NAME" "build/$BINARY_NAME" "./$BINARY_NAME"; do
-            if [ -f "$path" ]; then
-              BINARY_PATH="$path"
-              echo "Found binary at: $BINARY_PATH"
-              break
+          if [ "${{ matrix.platform }}" = "darwin" ]; then
+            # On macOS, Wails creates an app bundle
+            if [ -f "build/bin/$BINARY_NAME.app/Contents/MacOS/$BINARY_NAME" ]; then
+              BINARY_PATH="build/bin/$BINARY_NAME.app/Contents/MacOS/$BINARY_NAME"
+              echo "Found macOS app binary at: $BINARY_PATH"
             fi
-          done
+          else
+            # On Linux/Windows, look for regular binary
+            for path in "build/bin/$BINARY_NAME" "build/$BINARY_NAME" "./$BINARY_NAME"; do
+              if [ -f "$path" ]; then
+                BINARY_PATH="$path"
+                echo "Found binary at: $BINARY_PATH"
+                break
+              fi
+            done
+          fi
           
           if [ -z "$BINARY_PATH" ]; then
             echo "ERROR: Could not find built binary"
