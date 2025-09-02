@@ -50,20 +50,23 @@ function Initialize-Commands {
     Write-Host "Validating system commands..." -ForegroundColor Yellow
     
     # Validate and store full paths to prevent path injection
+    # Get-ValidatedCommand already verifies command existence and executability
     $script:GoCommand = Get-ValidatedCommand "go"
-    if (-not $script:GoCommand -or -not (Test-Path $script:GoCommand -PathType Leaf)) {
+    if (-not $script:GoCommand) {
         Write-Host "Error: 'go' command not found or is not a valid executable." -ForegroundColor Red
         exit 1
     }
+    
     $script:WailsCommand = Get-ValidatedCommand "wails"
-    if (-not $script:WailsCommand -or -not (Test-Path $script:WailsCommand -PathType Leaf)) {
+    if (-not $script:WailsCommand) {
         Write-Host "Error: 'wails' command not found or is not a valid executable." -ForegroundColor Red
         exit 1
     }
+    
+    # Ansible is optional for basic operations, so don't exit if not found
     $script:AnsibleCommand = Get-ValidatedCommand "ansible"
-    if (-not $script:AnsibleCommand -or -not (Test-Path $script:AnsibleCommand -PathType Leaf)) {
-        Write-Host "Error: 'ansible' command not found or is not a valid executable." -ForegroundColor Red
-        exit 1
+    if (-not $script:AnsibleCommand) {
+        Write-Host "Warning: 'ansible' command not found. Deployment features will be unavailable." -ForegroundColor Yellow
     }
     
     Write-Host "Command validation completed." -ForegroundColor Green
