@@ -99,14 +99,28 @@ jobs:
       - name: Install dependencies (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
-          # Try to install libwebkit2gtk-4.1-dev, fall back to 4.0-dev if not available, fail otherwise
-          if ! sudo apt-get install -y build-essential pkg-config libwebkit2gtk-4.1-dev; then
-            echo "libwebkit2gtk-4.1-dev not available, trying libwebkit2gtk-4.0-dev..."
-            if ! sudo apt-get install -y build-essential pkg-config libwebkit2gtk-4.0-dev; then
-              echo "ERROR: Failed to install either libwebkit2gtk-4.1-dev or libwebkit2gtk-4.0-dev" >&2
-              exit 1
+          # Install system dependencies
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config
+          
+          # Try to install libwebkit2gtk-4.1-dev first, then fall back to 4.0-dev
+          if sudo apt-get install -y libwebkit2gtk-4.1-dev; then
+            echo "Installed webkit2gtk-4.1-dev"
+            # Create symlink for 4.0 compatibility if needed
+            if [ ! -f /usr/lib/pkgconfig/webkit2gtk-4.0.pc ] && [ -f /usr/lib/pkgconfig/webkit2gtk-4.1.pc ]; then
+              sudo ln -sf /usr/lib/pkgconfig/webkit2gtk-4.1.pc /usr/lib/pkgconfig/webkit2gtk-4.0.pc
             fi
+            # Also check x86_64 path
+            if [ ! -f /usr/lib/x86_64-linux-gnu/pkgconfig/webkit2gtk-4.0.pc ] && [ -f /usr/lib/x86_64-linux-gnu/pkgconfig/webkit2gtk-4.1.pc ]; then
+              sudo ln -sf /usr/lib/x86_64-linux-gnu/pkgconfig/webkit2gtk-4.1.pc /usr/lib/x86_64-linux-gnu/pkgconfig/webkit2gtk-4.0.pc
+            fi
+          elif sudo apt-get install -y libwebkit2gtk-4.0-dev; then
+            echo "Installed webkit2gtk-4.0-dev"
+          else
+            echo "ERROR: Failed to install either libwebkit2gtk-4.1-dev or libwebkit2gtk-4.0-dev" >&2
+            exit 1
           fi
+          
           go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
           
       - name: Install Wails (macOS)
