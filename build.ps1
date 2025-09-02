@@ -38,8 +38,20 @@ function Initialize-Commands {
     
     # Validate and store full paths to prevent path injection
     $script:GoCommand = Get-ValidatedCommand "go"
+    if (-not $script:GoCommand -or -not (Test-Path $script:GoCommand -PathType Leaf)) {
+        Write-Host "Error: 'go' command not found or is not a valid executable." -ForegroundColor Red
+        exit 1
+    }
     $script:WailsCommand = Get-ValidatedCommand "wails"
+    if (-not $script:WailsCommand -or -not (Test-Path $script:WailsCommand -PathType Leaf)) {
+        Write-Host "Error: 'wails' command not found or is not a valid executable." -ForegroundColor Red
+        exit 1
+    }
     $script:AnsibleCommand = Get-ValidatedCommand "ansible"
+    if (-not $script:AnsibleCommand -or -not (Test-Path $script:AnsibleCommand -PathType Leaf)) {
+        Write-Host "Error: 'ansible' command not found or is not a valid executable." -ForegroundColor Red
+        exit 1
+    }
     
     Write-Host "Command validation completed." -ForegroundColor Green
 }
