@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -235,8 +236,28 @@ func (a *App) DeployStacks(host, user, password, volumePath string, config Stack
 	return a.runAnsiblePlaybook("main.yml", host, user, password, vars)
 }
 
+// validatePlaybookName validates that the playbook name is safe to use
+func validatePlaybookName(playbook string) error {
+	// Only allow alphanumeric characters, hyphens, underscores, and .yml extension
+	validPlaybook := regexp.MustCompile(`^[a-zA-Z0-9_-]+\.yml$`)
+	if !validPlaybook.MatchString(playbook) {
+		return fmt.Errorf("invalid playbook name: %s", playbook)
+	}
+	
+	// Check for path traversal attempts
+	if strings.Contains(playbook, "..") || strings.Contains(playbook, "/") || strings.Contains(playbook, "\\") {
+		return fmt.Errorf("playbook name contains invalid path characters: %s", playbook)
+	}
+	
+	return nil
+}
+
 // runAnsiblePlaybook executes an Ansible playbook
 func (a *App) runAnsiblePlaybook(playbook, host, user, password string, extraVars interface{}) error {
+	// Validate playbook name to prevent command injection
+	if err := validatePlaybookName(playbook); err != nil {
+		return fmt.Errorf("playbook validation failed: %v", err)
+	}
 	// Create temporary inventory
 	inventory := fmt.Sprintf(`
 all:
@@ -264,12 +285,24 @@ all:
 		return fmt.Errorf("failed to marshal vars: %v", err)
 	}
 
-	// Build ansible-playbook command
+	// Build ansible-playbook command with validated path
 	playbookPath := filepath.Join("ansible", "playbooks", playbook)
+	
+	// Verify the playbook file exists to prevent execution of non-existent files
+	if _, err := os.Stat(playbookPath); err != nil {
+		return fmt.Errorf("playbook file not found: %s", playbookPath)
+	}
+	
+	// Use absolute path to prevent path injection
+	absPlaybookPath, err := filepath.Abs(playbookPath)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute path: %v", err)
+	}
+	
 	cmd := exec.Command("ansible-playbook",
 		"-i", inventoryFile,
 		"-e", string(varsJSON),
-		playbookPath,
+		absPlaybookPath,
 	)
 
 	// Stream output to frontend

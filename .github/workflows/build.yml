@@ -127,20 +127,46 @@ jobs:
       - name: Prepare artifacts
         run: |
           mkdir -p dist
+          
+          # Find the built binary (Wails may place it in different locations)
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            cp build/bin/dockerizathinginator.exe dist/dockerizathinginator-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.extension }}
+            BINARY_NAME="dockerizathinginator.exe"
+            OUTPUT_NAME="dockerizathinginator-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.extension }}"
           else
-            cp build/bin/dockerizathinginator dist/dockerizathinginator-${{ matrix.platform }}-${{ matrix.arch }}
+            BINARY_NAME="dockerizathinginator"
+            OUTPUT_NAME="dockerizathinginator-${{ matrix.platform }}-${{ matrix.arch }}"
           fi
+          
+          # Look for the binary in common Wails output locations
+          BINARY_PATH=""
+          for path in "build/bin/$BINARY_NAME" "build/$BINARY_NAME" "./$BINARY_NAME"; do
+            if [ -f "$path" ]; then
+              BINARY_PATH="$path"
+              echo "Found binary at: $BINARY_PATH"
+              break
+            fi
+          done
+          
+          if [ -z "$BINARY_PATH" ]; then
+            echo "ERROR: Could not find built binary"
+            echo "Contents of build directory:"
+            find build -type f 2>/dev/null || echo "No build directory found"
+            echo "Contents of current directory:"
+            ls -la
+            exit 1
+          fi
+          
+          # Copy binary to dist
+          cp "$BINARY_PATH" "dist/$OUTPUT_NAME"
           
           # Copy Ansible playbooks
           cp -r ansible dist/
           
           # Create archive
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            7z a dist/dockerizathinginator-${{ matrix.platform }}-${{ matrix.arch }}.zip dist/dockerizathinginator-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.extension }} dist/ansible
+            7z a "dist/dockerizathinginator-${{ matrix.platform }}-${{ matrix.arch }}.zip" "dist/$OUTPUT_NAME" dist/ansible
           else
-            tar -czf dist/dockerizathinginator-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz -C dist dockerizathinginator-${{ matrix.platform }}-${{ matrix.arch }} ansible
+            tar -czf "dist/dockerizathinginator-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz" -C dist "$OUTPUT_NAME" ansible
           fi
         shell: bash
         

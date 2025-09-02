@@ -39,6 +39,38 @@
         - name: Prepare USB device
           when: usb_device is defined
           block:
+            - name: Validate USB device name
+              fail:
+                msg: "Invalid USB device name: {{ usb_device }}. Only USB devices like sdb, sdc, sdd, etc. are allowed (not sda which may be the system disk)."
+              when: >
+                usb_device is not match('^sd[b-z]$') and
+                usb_device is not match('^nvme[0-9]+n[0-9]+$') and
+                usb_device is not match('^mmcblk[0-9]+$')
+            
+            - name: Verify device is removable
+              shell: |
+                if [ -f "/sys/block/{{ usb_device }}/removable" ]; then
+                  cat /sys/block/{{ usb_device }}/removable
+                else
+                  echo "0"
+                fi
+              register: device_removable
+              
+            - name: Fail if device is not removable
+              fail:
+                msg: "Device {{ usb_device }} is not marked as removable. Refusing to format system devices for safety."
+              when: device_removable.stdout.strip() != "1"
+            
+            - name: Check if device exists
+              stat:
+                path: "/dev/{{ usb_device }}"
+              register: device_exists
+              
+            - name: Fail if device does not exist
+              fail:
+                msg: "Device /dev/{{ usb_device }} does not exist"
+              when: not device_exists.stat.exists
+
             - name: Unmount device if mounted
               mount:
                 path: "{{ item }}"
