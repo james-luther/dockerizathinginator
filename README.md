@@ -2,8 +2,9 @@
 
 **A cross-platform desktop application for automated Docker setup and container deployment on Raspberry Pi systems.**
 
-[![Build Status](https://github.com/james-luther/dockerizathinginator/workflows/Build%20and%20Release/badge.svg)](https://github.com/james-luther/dockerizathinginator/actions)
-[![Go Version](https://img.shields.io/github/go-mod/go-version/james-luther/dockerizathinginator)](https://golang.org/)
+[![Build and Release](https://github.com/james-luther/dockerizathinginator/actions/workflows/build.yml/badge.svg)](https://github.com/james-luther/dockerizathinginator/actions/workflows/build.yml)
+[![CodeQL](https://github.com/james-luther/dockerizathinginator/actions/workflows/codeql.yml/badge.svg)](https://github.com/james-luther/dockerizathinginator/actions/workflows/codeql.yml)
+[![Go Version](https://img.shields.io/badge/Go-1.22+-blue)](https://golang.org/)
 [![Wails](https://img.shields.io/badge/Wails-v2.10.2-blue)](https://wails.io)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
