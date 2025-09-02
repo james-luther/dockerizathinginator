@@ -1,0 +1,21 @@
+name: "CodeQL Configuration"
+
+# Disable default queries for Python since this is no longer a Python project
+disable-default-queries: false
+
+# Languages to analyze
+languages:
+  - go
+  - javascript
+
+# Paths to ignore during analysis
+paths-ignore:
+  - node_modules
+  - vendor
+  - build
+  - dist
+  - frontend/wailsjs
+
+# Additional queries to run (optional)
+# queries:
+#   - uses: security-and-quality

@@ -1,0 +1,23 @@
+# Linguist language detection overrides
+# Mark frontend files correctly
+*.html linguist-language=HTML
+*.css linguist-language=CSS
+*.js linguist-language=JavaScript
+
+# Mark Go files
+*.go linguist-language=Go
+go.mod linguist-language=Go
+go.sum linguist-language=Go
+
+# Mark Ansible files
+*.yml linguist-language=YAML
+*.yaml linguist-language=YAML
+
+# Exclude vendored/generated files from language statistics
+frontend/wailsjs/** linguist-generated=true
+frontend/dist/** linguist-generated=true
+build/** linguist-generated=true
+
+# Exclude documentation from language statistics
+*.md linguist-documentation=true
+README.md linguist-documentation=true
