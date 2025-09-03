@@ -1,6 +1,10 @@
 // Dockerizathinginator - Wails Frontend
 // Converted from Eel to Wails
 
+// Import Wails runtime functions
+const runtime = window.runtime || {};
+const App = window.go?.main?.App || {};
+
 // Global variables (migrated from original app.js)
 let connection = false;
 let host = 'raspberrypi.local';
@@ -23,15 +27,6 @@ let ghRepo = 'None';
 // Active pane management
 let activePane = "#connectionPane";
 let activeButton = "#connectionButton";
-
-// Wails runtime check
-function ensureWails() {
-    if (typeof window.go === 'undefined') {
-        console.error('Wails runtime not available');
-        return false;
-    }
-    return true;
-}
 
 document.addEventListener('DOMContentLoaded', function () {
     initializeApp();
@@ -66,13 +61,56 @@ function hideElements(selectors) {
 }
 
 function bindEventHandlers() {
+    console.log('Binding event handlers...');
+    
     // Sidebar navigation
-    document.getElementById('connectionButton').addEventListener('click', () => showPane('#connectionPane', '#connectionButton'));
-    document.getElementById('containerButton').addEventListener('click', () => showPane('#containerPane', '#containerButton'));
-    document.getElementById('volumeButton').addEventListener('click', () => showPane('#volumePane', '#volumeButton'));
-    document.getElementById('loggingButton').addEventListener('click', () => showPane('#loggingPane', '#loggingButton'));
-    document.getElementById('backupButton').addEventListener('click', () => showPane('#backupPane', '#backupButton'));
-    document.getElementById('summaryButton').addEventListener('click', () => showPane('#summaryPane', '#summaryButton'));
+    const connectionBtn = document.getElementById('connectionButton');
+    if (connectionBtn) {
+        connectionBtn.addEventListener('click', () => showPane('#connectionPane', '#connectionButton'));
+        console.log('Bound connectionButton');
+    } else {
+        console.error('connectionButton not found!');
+    }
+    
+    const containerBtn = document.getElementById('containerButton');
+    if (containerBtn) {
+        containerBtn.addEventListener('click', () => showPane('#containerPane', '#containerButton'));
+        console.log('Bound containerButton');
+    } else {
+        console.error('containerButton not found!');
+    }
+    
+    const volumeBtn = document.getElementById('volumeButton');
+    if (volumeBtn) {
+        volumeBtn.addEventListener('click', () => showPane('#volumePane', '#volumeButton'));
+        console.log('Bound volumeButton');
+    } else {
+        console.error('volumeButton not found!');
+    }
+    
+    const loggingBtn = document.getElementById('loggingButton');
+    if (loggingBtn) {
+        loggingBtn.addEventListener('click', () => showPane('#loggingPane', '#loggingButton'));
+        console.log('Bound loggingButton');
+    } else {
+        console.error('loggingButton not found!');
+    }
+    
+    const backupBtn = document.getElementById('backupButton');
+    if (backupBtn) {
+        backupBtn.addEventListener('click', () => showPane('#backupPane', '#backupButton'));
+        console.log('Bound backupButton');
+    } else {
+        console.error('backupButton not found!');
+    }
+    
+    const summaryBtn = document.getElementById('summaryButton');
+    if (summaryBtn) {
+        summaryBtn.addEventListener('click', () => showPane('#summaryPane', '#summaryButton'));
+        console.log('Bound summaryButton');
+    } else {
+        console.error('summaryButton not found!');
+    }
 
     // Connection test button
     document.getElementById('connectTest').addEventListener('click', testConnection);
@@ -87,12 +125,17 @@ function bindEventHandlers() {
 }
 
 function showPane(paneSelector, buttonSelector) {
+    console.log(`Switching to pane: ${paneSelector}, button: ${buttonSelector}`);
+    
     // Hide all panes
     const panes = ['#connectionPane', '#containerPane', '#volumePane', '#loggingPane', '#backupPane', '#summaryPane'];
     panes.forEach(selector => {
         const element = document.querySelector(selector);
         if (element) {
             element.style.display = 'none';
+            console.log(`Hidden pane: ${selector}`);
+        } else {
+            console.warn(`Pane not found: ${selector}`);
         }
     });
 
@@ -100,6 +143,9 @@ function showPane(paneSelector, buttonSelector) {
     const selectedPane = document.querySelector(paneSelector);
     if (selectedPane) {
         selectedPane.style.display = 'block';
+        console.log(`Shown pane: ${paneSelector}`);
+    } else {
+        console.error(`ERROR: Could not find pane: ${paneSelector}`);
     }
 
     // Update active button
@@ -125,8 +171,6 @@ function setActiveButton(buttonSelector) {
 
 // Connection testing (converted from Eel)
 async function testConnection() {
-    if (!ensureWails()) return;
-
     const connectBtn = document.getElementById('connectTest');
     const loader = document.getElementById('connectLoader');
     const connectFail = document.getElementById('connectFail');
@@ -151,15 +195,15 @@ async function testConnection() {
     try {
         console.log(`Testing connection to ${host} with user ${user}`);
         
-        // Call Wails backend
-        const result = await window.go.main.App.TestSSH(host, user, piPass);
+        // Call Wails backend - use App directly
+        const result = await App.TestSSH(host, user, piPass);
         
         loader.style.display = 'none';
         connectBtn.disabled = false;
 
         if (result.success) {
             // Get Pi model
-            const model = await window.go.main.App.GetModel(host, user, piPass);
+            const model = await App.GetModel(host, user, piPass);
             
             document.getElementById('modelSuccess').textContent = `Connected to: ${model}`;
             connectSuccess.style.display = 'block';
@@ -168,7 +212,7 @@ async function testConnection() {
             // Enable other navigation options
             enableNavigation();
         } else {
-            document.getElementById('modelFail').textContent = result.message;
+            document.getElementById('modelFail').textContent = result.message || 'Connection failed';
             connectFail.style.display = 'block';
             connection = false;
         }
@@ -177,7 +221,7 @@ async function testConnection() {
         loader.style.display = 'none';
         connectBtn.disabled = false;
         
-        document.getElementById('modelFail').textContent = `Connection failed: ${error.message}`;
+        document.getElementById('modelFail').textContent = `Connection failed: ${error.message || error}`;
         connectFail.style.display = 'block';
         connection = false;
     }

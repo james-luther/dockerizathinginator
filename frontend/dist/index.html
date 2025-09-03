@@ -117,23 +117,116 @@
 
   <!-- Other panes (hidden by default) -->
   <div id="containerPane" class="bg-black flex-1 ml-56 px-20 text-white pt-10 fixed min-h-screen overflow-y-scroll" style="display: none;">
-    <!-- Container selection content here -->
+    <h1 class="text-3xl mb-6">Select Container Stacks</h1>
+    <div class="grid grid-cols-1 gap-4">
+      <div class="bg-gray-800 p-4 rounded">
+        <h2 class="text-xl mb-2">🌐 Network Stack</h2>
+        <p class="text-gray-400">Pi-hole, UniFi Controller, Nginx Proxy Manager, Squid, Heimdall</p>
+        <input type="checkbox" id="networkStack" class="mt-2">
+        <label for="networkStack" class="ml-2">Select Network Stack</label>
+      </div>
+      <div class="bg-gray-800 p-4 rounded">
+        <h2 class="text-xl mb-2">🏠 IoT Stack</h2>
+        <p class="text-gray-400">InfluxDB, OpenHAB, Mosquitto, Home Assistant, Grafana</p>
+        <input type="checkbox" id="iotStack" class="mt-2">
+        <label for="iotStack" class="ml-2">Select IoT Stack</label>
+      </div>
+      <div class="bg-gray-800 p-4 rounded">
+        <h2 class="text-xl mb-2">🎬 Media Stack</h2>
+        <p class="text-gray-400">Plex, Emby, NextCloud</p>
+        <input type="checkbox" id="mediaStack" class="mt-2">
+        <label for="mediaStack" class="ml-2">Select Media Stack</label>
+      </div>
+    </div>
   </div>
 
   <div id="volumePane" class="bg-black flex-1 ml-56 px-20 text-white pt-10 fixed min-h-screen" style="display: none;">
-    <!-- Volume configuration content here -->
+    <h1 class="text-3xl mb-6">Volume Configuration</h1>
+    <div class="bg-gray-800 p-6 rounded">
+      <h2 class="text-xl mb-4">Storage Type</h2>
+      <div class="space-y-2">
+        <div>
+          <input type="radio" id="usbStorage" name="storageType" value="usb" checked>
+          <label for="usbStorage" class="ml-2">USB Drive</label>
+        </div>
+        <div>
+          <input type="radio" id="nfsStorage" name="storageType" value="nfs">
+          <label for="nfsStorage" class="ml-2">NFS Network Share</label>
+        </div>
+        <div>
+          <input type="radio" id="cifsStorage" name="storageType" value="cifs">
+          <label for="cifsStorage" class="ml-2">CIFS/SMB Share</label>
+        </div>
+      </div>
+      <div class="mt-4">
+        <label class="block mb-2">Mount Point:</label>
+        <input type="text" value="/mnt/docker" class="bg-gray-700 text-white p-2 rounded w-full">
+      </div>
+    </div>
   </div>
 
   <div id="loggingPane" class="bg-black flex-1 ml-56 px-20 text-white pt-10 fixed min-h-screen" style="display: none;">
-    <!-- Logging configuration content here -->
+    <h1 class="text-3xl mb-6">Logging Options</h1>
+    <div class="bg-gray-800 p-6 rounded">
+      <div class="space-y-4">
+        <div>
+          <input type="checkbox" id="log2ram" checked>
+          <label for="log2ram" class="ml-2">Enable Log2Ram (Protect SD Card)</label>
+          <p class="text-gray-400 text-sm ml-6 mt-1">Reduces SD card writes by keeping logs in RAM</p>
+        </div>
+        <div>
+          <input type="checkbox" id="centralLogging">
+          <label for="centralLogging" class="ml-2">Enable Central Logging</label>
+          <p class="text-gray-400 text-sm ml-6 mt-1">Send logs to a central syslog server</p>
+        </div>
+        <div>
+          <label class="block mb-2">Log Retention (days):</label>
+          <input type="number" value="30" min="1" max="365" class="bg-gray-700 text-white p-2 rounded w-32">
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="backupPane" class="bg-black flex-1 ml-56 px-20 text-white pt-10 fixed min-h-screen" style="display: none;">
-    <!-- Backup configuration content here -->
+    <h1 class="text-3xl mb-6">Cloud Backup Configuration</h1>
+    <div class="bg-gray-800 p-6 rounded">
+      <h2 class="text-xl mb-4">GitHub Repository Backup</h2>
+      <div class="space-y-4">
+        <div>
+          <label class="block mb-2">GitHub Username:</label>
+          <input type="text" placeholder="username" class="bg-gray-700 text-white p-2 rounded w-full">
+        </div>
+        <div>
+          <label class="block mb-2">GitHub Email:</label>
+          <input type="email" placeholder="email@example.com" class="bg-gray-700 text-white p-2 rounded w-full">
+        </div>
+        <div>
+          <label class="block mb-2">Repository Name:</label>
+          <input type="text" placeholder="pi-docker-configs" class="bg-gray-700 text-white p-2 rounded w-full">
+        </div>
+        <div>
+          <label class="block mb-2">Access Token:</label>
+          <input type="password" placeholder="ghp_xxxxxxxxxxxx" class="bg-gray-700 text-white p-2 rounded w-full">
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="summaryPane" class="bg-black flex-1 ml-56 px-20 text-white pt-10 fixed min-h-screen" style="display: none;">
-    <!-- Summary and deployment content here -->
+    <h1 class="text-3xl mb-6">Deployment Summary</h1>
+    <div class="bg-gray-800 p-6 rounded mb-4">
+      <h2 class="text-xl mb-4">Configuration Review</h2>
+      <div id="summaryContent" class="space-y-2 text-gray-300">
+        <p>• Connection: Not configured</p>
+        <p>• Selected Stacks: None</p>
+        <p>• Storage Type: Not configured</p>
+        <p>• Logging: Not configured</p>
+        <p>• Backup: Not configured</p>
+      </div>
+    </div>
+    <button id="deployButton" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded">
+      Deploy Configuration
+    </button>
   </div>
 
   <!-- Ansible Output Modal -->
@@ -153,7 +246,11 @@
     </div>
   </div>
 
-  <script src="./wails.js"></script>
+  <!-- Wails Runtime -->
+  <script src="../wailsjs/runtime/runtime.js"></script>
+  <!-- Go bindings -->
+  <script src="../wailsjs/go/main/App.js"></script>
+  <!-- Application JavaScript -->
   <script src="./app.js"></script>
 </body>
 </html>

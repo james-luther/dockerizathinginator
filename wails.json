@@ -12,14 +12,14 @@
     }
   },
   "author": {
-    "name": "b34rdtek",
-    "email": ""
+    "name": "James Luther",
+    "email": "james@colibrisec.org"
   },
   "info": {
     "companyName": "dockerizathinginator",
     "productName": "Dockerizathinginator",
     "productVersion": "2.0.0",
-    "copyright": "Copyright (c) 2024 b34rdtek",
+    "copyright": "Copyright (c) 2024 James Luther",
     "comments": "Raspberry Pi Docker automation tool"
   }
 }
