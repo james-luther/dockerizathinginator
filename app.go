@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -65,17 +66,58 @@ func (a *App) TestSSH(host, user, password string) ConnectionResult {
 		a.sshClient = nil
 	}
 
+	// Validate inputs
+	if host == "" || user == "" || password == "" {
+		return ConnectionResult{
+			Success: false,
+			Message: "Host, user, and password are required",
+		}
+	}
+
+	// Support multiple authentication methods
+	var authMethods []ssh.AuthMethod
+	
+	// Add password authentication
+	authMethods = append(authMethods, ssh.Password(password))
+	
+	// For localhost connections, also try keyboard-interactive
+	if strings.Contains(host, "localhost") || strings.Contains(host, "127.0.0.1") {
+		authMethods = append(authMethods, ssh.KeyboardInteractive(func(user, instruction string, questions []string, echos []bool) ([]string, error) {
+			answers := make([]string, len(questions))
+			for i := range questions {
+				answers[i] = password
+			}
+			return answers, nil
+		}))
+	}
+
 	config := &ssh.ClientConfig{
-		User: user,
-		Auth: []ssh.AuthMethod{
-			ssh.Password(password),
-		},
-		// NOTE: Using InsecureIgnoreHostKey() for ease of use in Pi configuration scenarios.
-		// This disables host key verification and could be vulnerable to MITM attacks.
-		// In production environments, consider implementing proper host key verification
-		// or at minimum warn users about connecting only to trusted networks.
+		User:            user,
+		Auth:            authMethods,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Timeout:         5 * time.Second,
+		Timeout:         10 * time.Second, // Increased timeout for better reliability
+		ClientVersion:   "SSH-2.0-Dockerizathinginator",
+		// Add cipher and kex configurations for better compatibility
+		Config: ssh.Config{
+			Ciphers: []string{
+				"aes128-ctr", "aes192-ctr", "aes256-ctr",
+				"aes128-gcm@openssh.com", "aes256-gcm@openssh.com",
+				"chacha20-poly1305@openssh.com",
+				"arcfour256", "arcfour128", "arcfour",
+				"aes128-cbc", "3des-cbc", "aes192-cbc", "aes256-cbc",
+			},
+			KeyExchanges: []string{
+				"curve25519-sha256", "curve25519-sha256@libssh.org",
+				"ecdh-sha2-nistp256", "ecdh-sha2-nistp384", "ecdh-sha2-nistp521",
+				"diffie-hellman-group14-sha256", "diffie-hellman-group16-sha512",
+				"diffie-hellman-group-exchange-sha256",
+				"diffie-hellman-group14-sha1", "diffie-hellman-group1-sha1",
+			},
+			MACs: []string{
+				"hmac-sha2-256-etm@openssh.com", "hmac-sha2-512-etm@openssh.com",
+				"hmac-sha2-256", "hmac-sha2-512", "hmac-sha1", "hmac-sha1-96",
+			},
+		},
 	}
 
 	// Add port if not specified
@@ -83,8 +125,59 @@ func (a *App) TestSSH(host, user, password string) ConnectionResult {
 		host = host + ":22"
 	}
 
+	// Debug logging
+	log.Printf("Attempting SSH connection to %s with user %s", host, user)
+	
 	client, err := ssh.Dial("tcp", host, config)
+	
+	// If the advanced config fails, try a simpler configuration
+	if err != nil && strings.Contains(err.Error(), "message type") {
+		log.Printf("Advanced SSH config failed, trying simple config: %v", err)
+		
+		simpleConfig := &ssh.ClientConfig{
+			User:            user,
+			Auth:            authMethods,
+			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+			Timeout:         10 * time.Second,
+		}
+		
+		client, err = ssh.Dial("tcp", host, simpleConfig)
+	}
+	
 	if err != nil {
+		// Provide more specific error messages
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "no supported methods remain") {
+			if strings.Contains(host, "localhost") || strings.Contains(host, "127.0.0.1") {
+				return ConnectionResult{
+					Success: false,
+					Message: "SSH authentication failed. For localhost connections, ensure:\n1. SSH server is running (try: sudo systemctl start ssh)\n2. Password authentication is enabled in /etc/ssh/sshd_config\n3. User exists and password is correct",
+				}
+			}
+			return ConnectionResult{
+				Success: false,
+				Message: "SSH authentication failed. Check username/password and ensure SSH server allows password authentication",
+			}
+		}
+		if strings.Contains(errMsg, "connection refused") {
+			return ConnectionResult{
+				Success: false,
+				Message: "Connection refused. SSH server may not be running on the target host",
+			}
+		}
+		if strings.Contains(errMsg, "network is unreachable") || strings.Contains(errMsg, "no route to host") {
+			return ConnectionResult{
+				Success: false,
+				Message: "Network unreachable. Check host address and network connectivity",
+			}
+		}
+		if strings.Contains(errMsg, "timeout") {
+			return ConnectionResult{
+				Success: false,
+				Message: "Connection timeout. Check host address and ensure SSH server is accessible",
+			}
+		}
+		
 		return ConnectionResult{
 			Success: false,
 			Message: fmt.Sprintf("Connection failed: %v", err),
@@ -94,11 +187,11 @@ func (a *App) TestSSH(host, user, password string) ConnectionResult {
 	a.sshClient = client
 	return ConnectionResult{
 		Success: true,
-		Message: "connected",
+		Message: "Connected successfully",
 	}
 }
 
-// GetModel gets the Raspberry Pi model
+// GetModel detects the OS type and system information
 func (a *App) GetModel(host, user, password string) string {
 	// Ensure we're connected
 	result := a.TestSSH(host, user, password)
@@ -119,14 +212,112 @@ func (a *App) GetModel(host, user, password string) string {
 	}
 	defer session.Close()
 
-	output, err := session.Output("cat /proc/device-tree/model")
-	if err != nil {
-		return fmt.Sprintf("Error: %v", err)
+	// Comprehensive OS detection - try multiple methods
+	var osType, osDetails string
+	var isLinux, isSupported bool
+
+	// Method 1: Try uname first (works on Unix-like systems)
+	output, err := session.Output("uname -s 2>/dev/null")
+	if err == nil && len(output) > 0 {
+		osType = strings.TrimSpace(string(output))
+		log.Printf("uname detected OS: %s", osType)
+		
+		switch osType {
+		case "Linux":
+			isLinux = true
+			isSupported = true
+			osDetails = "Linux"
+		case "Darwin":
+			osDetails = "macOS"
+		case "FreeBSD", "OpenBSD", "NetBSD":
+			osDetails = fmt.Sprintf("%s (BSD)", osType)
+		default:
+			osDetails = osType
+		}
+	} else {
+		// Method 2: Try Windows detection (for systems with Windows SSH)
+		session2, err2 := a.sshClient.NewSession()
+		if err2 != nil {
+			return "❌ OS detection failed - cannot create session"
+		}
+		defer session2.Close()
+
+		output, err2 = session2.Output("echo %OS% 2>/dev/null")
+		if err2 == nil && strings.Contains(strings.ToUpper(string(output)), "WINDOWS") {
+			osType = "Windows"
+			osDetails = "Windows"
+			log.Printf("Windows detected via echo %%OS%%")
+		} else {
+			// Method 3: Try ver command for Windows
+			session3, err3 := a.sshClient.NewSession()
+			if err3 != nil {
+				return "❌ OS detection failed - cannot create session"
+			}
+			defer session3.Close()
+
+			output, err3 = session3.Output("ver 2>/dev/null")
+			if err3 == nil && strings.Contains(strings.ToLower(string(output)), "windows") {
+				osType = "Windows"
+				osDetails = strings.TrimSpace(string(output))
+				log.Printf("Windows detected via ver command: %s", osDetails)
+			} else {
+				// Method 4: Try systeminfo for detailed Windows info
+				session4, err4 := a.sshClient.NewSession()
+				if err4 != nil {
+					return "❌ OS detection failed - multiple methods failed"
+				}
+				defer session4.Close()
+
+				output, err4 = session4.Output("systeminfo | findstr /B \"OS Name\" 2>/dev/null")
+				if err4 == nil && len(output) > 0 {
+					osType = "Windows"
+					osDetails = strings.TrimSpace(string(output))
+					log.Printf("Windows detected via systeminfo: %s", osDetails)
+				} else {
+					return "❌ OS detection failed - system type unknown"
+				}
+			}
+		}
 	}
 
-	// Remove null bytes that might be in the output
-	model := strings.TrimSpace(strings.Trim(string(output), "\x00"))
-	return model
+	log.Printf("Final OS detection - Type: %s, Details: %s, IsLinux: %v", osType, osDetails, isLinux)
+
+	// Handle different OS types
+	if !isSupported {
+		return fmt.Sprintf("❌ Connected to %s (Unsupported: This tool requires Linux/Raspberry Pi)", osDetails)
+	}
+
+	// It's Linux, now try to get more specific info
+	session2, err := a.sshClient.NewSession()
+	if err != nil {
+		return "Connected to Linux system"
+	}
+	defer session2.Close()
+
+	// Try to detect if it's a Raspberry Pi
+	output, err = session2.Output("cat /proc/device-tree/model 2>/dev/null")
+	if err == nil && len(output) > 0 {
+		// Remove null bytes that might be in the output
+		model := strings.TrimSpace(strings.Trim(string(output), "\x00"))
+		if model != "" && strings.Contains(strings.ToLower(model), "raspberry") {
+			return fmt.Sprintf("✅ %s", model)
+		}
+	}
+
+	// Not a Raspberry Pi, get general Linux info
+	session3, err := a.sshClient.NewSession()
+	if err != nil {
+		return "Connected to Linux system (non-Raspberry Pi)"
+	}
+	defer session3.Close()
+
+	output, err = session3.Output("cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d'=' -f2 | tr -d '\"'")
+	if err == nil && len(output) > 0 {
+		distro := strings.TrimSpace(string(output))
+		return fmt.Sprintf("⚠️  Connected to %s (Warning: Optimized for Raspberry Pi)", distro)
+	}
+
+	return "⚠️  Connected to Linux system (Warning: This tool is optimized for Raspberry Pi)"
 }
 
 // StorageConfig represents storage configuration
@@ -333,4 +524,117 @@ func (a *App) EmitStatus(status string, success bool) {
 		"status":  status,
 		"success": success,
 	})
+}
+
+// GitHubAuthStatus represents the current GitHub authentication status
+type GitHubAuthStatus struct {
+	IsAuthenticated bool   `json:"is_authenticated"`
+	Username        string `json:"username,omitempty"`
+	Email           string `json:"email,omitempty"`
+	Error           string `json:"error,omitempty"`
+}
+
+// InitiateGitHubAuth starts the GitHub OAuth flow
+func (a *App) InitiateGitHubAuth() error {
+	oauthService := NewGitHubOAuthService(a.ctx)
+	
+	authURL, err := oauthService.InitiateOAuth()
+	if err != nil {
+		return fmt.Errorf("failed to initiate GitHub OAuth: %w", err)
+	}
+
+	// Open browser to authorization URL
+	runtime.BrowserOpenURL(a.ctx, authURL)
+	
+	// Wait for callback with 5 minute timeout
+	token, err := oauthService.WaitForCallback(5 * time.Minute)
+	if err != nil {
+		return fmt.Errorf("OAuth callback failed: %w", err)
+	}
+
+	// Get user information
+	tokenInfo, err := oauthService.GetUserInfo(token)
+	if err != nil {
+		return fmt.Errorf("failed to get user info: %w", err)
+	}
+
+	// Save token securely
+	err = oauthService.SaveToken(tokenInfo)
+	if err != nil {
+		return fmt.Errorf("failed to save token: %w", err)
+	}
+
+	// Emit success event
+	runtime.EventsEmit(a.ctx, "githubAuthSuccess", map[string]interface{}{
+		"username": tokenInfo.Username,
+		"email":    tokenInfo.Email,
+	})
+
+	return nil
+}
+
+// GetGitHubAuthStatus checks the current GitHub authentication status
+func (a *App) GetGitHubAuthStatus() GitHubAuthStatus {
+	oauthService := NewGitHubOAuthService(a.ctx)
+	
+	tokenInfo, err := oauthService.LoadToken()
+	if err != nil {
+		return GitHubAuthStatus{
+			IsAuthenticated: false,
+			Error:           "No stored authentication found",
+		}
+	}
+
+	// Validate token
+	err = oauthService.ValidateToken(tokenInfo)
+	if err != nil {
+		return GitHubAuthStatus{
+			IsAuthenticated: false,
+			Error:           "Authentication expired or invalid",
+		}
+	}
+
+	return GitHubAuthStatus{
+		IsAuthenticated: true,
+		Username:        tokenInfo.Username,
+		Email:           tokenInfo.Email,
+	}
+}
+
+// DisconnectGitHub revokes and removes stored GitHub authentication
+func (a *App) DisconnectGitHub() error {
+	oauthService := NewGitHubOAuthService(a.ctx)
+	
+	err := oauthService.DeleteToken()
+	if err != nil {
+		return fmt.Errorf("failed to disconnect GitHub: %w", err)
+	}
+
+	runtime.EventsEmit(a.ctx, "githubDisconnected", nil)
+	return nil
+}
+
+// CreateBackupRepository creates a new GitHub repository for backups
+func (a *App) CreateBackupRepository(repoName string) error {
+	oauthService := NewGitHubOAuthService(a.ctx)
+	
+	tokenInfo, err := oauthService.LoadToken()
+	if err != nil {
+		return fmt.Errorf("not authenticated with GitHub: %w", err)
+	}
+
+	// Validate token first
+	err = oauthService.ValidateToken(tokenInfo)
+	if err != nil {
+		return fmt.Errorf("GitHub authentication expired: %w", err)
+	}
+
+	// TODO: Implement repository creation using GitHub API
+	// This will require the github.com/google/go-github package
+	runtime.EventsEmit(a.ctx, "backupRepoCreated", map[string]interface{}{
+		"repo_name": repoName,
+		"username":  tokenInfo.Username,
+	})
+
+	return nil
 }

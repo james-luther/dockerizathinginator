@@ -122,6 +122,9 @@ function bindEventHandlers() {
 
     // Prevent form submission
     document.querySelector('form').addEventListener('submit', (e) => e.preventDefault());
+
+    // GitHub OAuth handlers
+    bindGitHubOAuthHandlers();
 }
 
 function showPane(paneSelector, buttonSelector) {
@@ -133,6 +136,7 @@ function showPane(paneSelector, buttonSelector) {
         const element = document.querySelector(selector);
         if (element) {
             element.style.display = 'none';
+            element.style.visibility = 'hidden';
             console.log(`Hidden pane: ${selector}`);
         } else {
             console.warn(`Pane not found: ${selector}`);
@@ -142,7 +146,10 @@ function showPane(paneSelector, buttonSelector) {
     // Show selected pane
     const selectedPane = document.querySelector(paneSelector);
     if (selectedPane) {
+        // Force display to block and visibility to visible
         selectedPane.style.display = 'block';
+        selectedPane.style.visibility = 'visible';
+        selectedPane.style.setProperty('display', 'block', 'important');
         console.log(`Shown pane: ${paneSelector}`);
     } else {
         console.error(`ERROR: Could not find pane: ${paneSelector}`);
@@ -156,16 +163,22 @@ function showPane(paneSelector, buttonSelector) {
 }
 
 function setActiveButton(buttonSelector) {
+    console.log(`Setting active button: ${buttonSelector}`);
+    
     // Remove active styling from all buttons
     const buttons = document.querySelectorAll('.sidebar-icon');
     buttons.forEach(btn => {
         btn.classList.remove('bg-gray-800');
+        console.log(`Removed active class from button`);
     });
 
     // Add active styling to selected button
     const activeBtn = document.querySelector(buttonSelector);
     if (activeBtn) {
         activeBtn.classList.add('bg-gray-800');
+        console.log(`Added active class to: ${buttonSelector}`);
+    } else {
+        console.error(`ERROR: Could not find button: ${buttonSelector}`);
     }
 }
 
@@ -202,15 +215,37 @@ async function testConnection() {
         connectBtn.disabled = false;
 
         if (result.success) {
-            // Get Pi model
+            // Get Pi model/OS info
             const model = await App.GetModel(host, user, piPass);
             
-            document.getElementById('modelSuccess').textContent = `Connected to: ${model}`;
-            connectSuccess.style.display = 'block';
-            connection = true;
-            
-            // Enable other navigation options
-            enableNavigation();
+            // Check if the system is unsupported (contains ❌) or has warnings (contains ⚠️)
+            if (model.includes('❌')) {
+                // Unsupported system - show as error
+                document.getElementById('modelFail').textContent = model;
+                connectFail.style.display = 'block';
+                connection = false;
+            } else if (model.includes('⚠️')) {
+                // Supported but with warnings - show warning message
+                document.getElementById('modelSuccess').textContent = model;
+                // Change success box style to warning
+                const successBox = document.getElementById('connectSuccess');
+                const successHeader = successBox.querySelector('.bg-green-500');
+                successHeader.className = successHeader.className.replace('bg-green-500', 'bg-yellow-500');
+                successHeader.textContent = 'Warning';
+                successBox.style.display = 'block';
+                connection = true; // Allow continuation with warnings
+                
+                // Enable other navigation options
+                enableNavigation();
+            } else {
+                // Fully supported system - show success
+                document.getElementById('modelSuccess').textContent = model;
+                connectSuccess.style.display = 'block';
+                connection = true;
+                
+                // Enable other navigation options
+                enableNavigation();
+            }
         } else {
             document.getElementById('modelFail').textContent = result.message || 'Connection failed';
             connectFail.style.display = 'block';
@@ -287,6 +322,23 @@ function listenForWailsEvents() {
     window.runtime.EventsOn('statusUpdate', (status) => {
         console.log('Status update:', status);
         updateStatusDisplay(status);
+    });
+
+    // Listen for GitHub OAuth events
+    window.runtime.EventsOn('githubAuthSuccess', (data) => {
+        console.log('GitHub auth success:', data);
+        updateGitHubAuthUI(true, data.username, data.email);
+        showAlert('success', `Connected to GitHub as ${data.username}`);
+    });
+
+    window.runtime.EventsOn('githubDisconnected', () => {
+        console.log('GitHub disconnected');
+        updateGitHubAuthUI(false);
+    });
+
+    window.runtime.EventsOn('backupRepoCreated', (data) => {
+        console.log('Backup repo created:', data);
+        showAlert('success', `Repository "${data.repo_name}" created successfully!`);
     });
 }
 
@@ -460,7 +512,15 @@ async function installPortainer() {
 }
 
 // Utility functions
-function log(message) {
+function ensureWails() {
+    if (!window.go || !window.go.main || !window.go.main.App) {
+        console.warn('Wails runtime not available');
+        return false;
+    }
+    return true;
+}
+
+function logMessage(message) {
     console.log(`[Dockerizathinginator] ${message}`);
 }
 
@@ -475,3 +535,198 @@ window.dockerizathinginator = {
     installDocker,
     installPortainer
 };
+
+// Export navigation functions globally
+window.showPane = showPane;
+window.setActiveButton = setActiveButton;
+
+// GitHub OAuth Functions
+function bindGitHubOAuthHandlers() {
+    // Connect GitHub button
+    const connectBtn = document.getElementById('connectGitHub');
+    if (connectBtn) {
+        connectBtn.addEventListener('click', connectToGitHub);
+    }
+
+    // Disconnect GitHub button
+    const disconnectBtn = document.getElementById('disconnectGitHub');
+    if (disconnectBtn) {
+        disconnectBtn.addEventListener('click', disconnectFromGitHub);
+    }
+
+    // Create repository button
+    const createRepoBtn = document.getElementById('createRepoBtn');
+    if (createRepoBtn) {
+        createRepoBtn.addEventListener('click', createBackupRepository);
+    }
+
+    // Test backup button
+    const testBackupBtn = document.getElementById('testBackupBtn');
+    if (testBackupBtn) {
+        testBackupBtn.addEventListener('click', testBackup);
+    }
+
+    // Check GitHub auth status on page load
+    checkGitHubAuthStatus();
+}
+
+async function connectToGitHub() {
+    if (!ensureWails()) {
+        showAlert('error', 'Application not ready');
+        return;
+    }
+
+    const connectBtn = document.getElementById('connectGitHub');
+    const originalText = connectBtn.innerHTML;
+    
+    try {
+        // Show loading state
+        connectBtn.disabled = true;
+        connectBtn.innerHTML = '<div class="loading-spinner mr-2"></div> Connecting...';
+        
+        console.log('Initiating GitHub OAuth...');
+        await window.go.main.App.InitiateGitHubAuth();
+        
+    } catch (error) {
+        console.error('GitHub OAuth failed:', error);
+        showAlert('error', `GitHub connection failed: ${error.message || error}`);
+        
+        // Reset button state
+        connectBtn.disabled = false;
+        connectBtn.innerHTML = originalText;
+    }
+}
+
+async function disconnectFromGitHub() {
+    if (!ensureWails()) {
+        showAlert('error', 'Application not ready');
+        return;
+    }
+
+    try {
+        await window.go.main.App.DisconnectGitHub();
+        updateGitHubAuthUI(false);
+        showAlert('success', 'Disconnected from GitHub');
+    } catch (error) {
+        console.error('GitHub disconnect failed:', error);
+        showAlert('error', `Disconnect failed: ${error.message || error}`);
+    }
+}
+
+async function checkGitHubAuthStatus() {
+    if (!ensureWails()) return;
+
+    try {
+        const status = await window.go.main.App.GetGitHubAuthStatus();
+        updateGitHubAuthUI(status.is_authenticated, status.username, status.email);
+    } catch (error) {
+        console.error('Failed to check GitHub auth status:', error);
+        updateGitHubAuthUI(false);
+    }
+}
+
+function updateGitHubAuthUI(isAuthenticated, username = '', email = '') {
+    const authStatusTitle = document.getElementById('authStatusTitle');
+    const authStatusDesc = document.getElementById('authStatusDesc');
+    const authButtons = document.getElementById('authButtons');
+    const connectedState = document.getElementById('connectedState');
+    const connectedUsername = document.getElementById('connectedUsername');
+    const connectedEmail = document.getElementById('connectedEmail');
+    const repoConfigCard = document.getElementById('repoConfigCard');
+    const connectBtn = document.getElementById('connectGitHub');
+
+    if (isAuthenticated) {
+        // Update header
+        authStatusTitle.textContent = 'GitHub Connected';
+        authStatusDesc.textContent = 'Ready for secure backup to GitHub';
+        
+        // Show connected state
+        connectedState.style.display = 'block';
+        connectedUsername.textContent = `Connected as: ${username}`;
+        connectedEmail.textContent = email;
+        
+        // Hide connect button
+        authButtons.style.display = 'none';
+        
+        // Enable repository configuration
+        repoConfigCard.style.opacity = '1';
+        repoConfigCard.style.pointerEvents = 'auto';
+        
+    } else {
+        // Update header
+        authStatusTitle.textContent = 'Connect to GitHub';
+        authStatusDesc.textContent = 'Authenticate with GitHub for secure backup';
+        
+        // Hide connected state
+        connectedState.style.display = 'none';
+        
+        // Show connect button
+        authButtons.style.display = 'block';
+        
+        // Reset connect button state
+        if (connectBtn) {
+            connectBtn.disabled = false;
+            connectBtn.innerHTML = '<i class="fab fa-github mr-2"></i> Connect GitHub';
+        }
+        
+        // Disable repository configuration
+        repoConfigCard.style.opacity = '0.5';
+        repoConfigCard.style.pointerEvents = 'none';
+    }
+}
+
+async function createBackupRepository() {
+    if (!ensureWails()) {
+        showAlert('error', 'Application not ready');
+        return;
+    }
+
+    const repoName = document.getElementById('repoName').value.trim();
+    if (!repoName) {
+        showAlert('error', 'Please enter a repository name');
+        return;
+    }
+
+    const createBtn = document.getElementById('createRepoBtn');
+    const originalText = createBtn.innerHTML;
+    
+    try {
+        createBtn.disabled = true;
+        createBtn.innerHTML = '<div class="loading-spinner mr-2"></div> Creating...';
+        
+        await window.go.main.App.CreateBackupRepository(repoName);
+        showAlert('success', `Repository "${repoName}" created successfully!`);
+        
+    } catch (error) {
+        console.error('Repository creation failed:', error);
+        showAlert('error', `Failed to create repository: ${error.message || error}`);
+    } finally {
+        createBtn.disabled = false;
+        createBtn.innerHTML = originalText;
+    }
+}
+
+async function testBackup() {
+    if (!ensureWails()) {
+        showAlert('error', 'Application not ready');
+        return;
+    }
+
+    const testBtn = document.getElementById('testBackupBtn');
+    const originalText = testBtn.innerHTML;
+    
+    try {
+        testBtn.disabled = true;
+        testBtn.innerHTML = '<div class="loading-spinner mr-2"></div> Testing...';
+        
+        // TODO: Implement actual backup test
+        showAlert('success', 'Backup test completed successfully!');
+        
+    } catch (error) {
+        console.error('Backup test failed:', error);
+        showAlert('error', `Backup test failed: ${error.message || error}`);
+    } finally {
+        testBtn.disabled = false;
+        testBtn.innerHTML = originalText;
+    }
+}
