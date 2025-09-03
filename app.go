@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/oauth2"
 )
 
 // App struct
@@ -63,8 +65,7 @@ func createHostKeyCallback() ssh.HostKeyCallback {
 		// Log the key for security awareness - admins can monitor these logs
 		keyType := key.Type()
 		fingerprint := ssh.FingerprintSHA256(key)
-		log.Printf("SSH: Accepting %s key from %s (%s) with fingerprint %s", 
-			keyType, hostname, remote.String(), fingerprint)
+		log.Printf("SSH: Accepting %s key with fingerprint %s", keyType, fingerprint)
 		
 		// For production use, consider implementing:
 		// 1. Key pinning for known hosts
@@ -148,7 +149,7 @@ func (a *App) TestSSH(host, user, password string) ConnectionResult {
 	}
 
 	// Debug logging
-	log.Printf("Attempting SSH connection to %s with user %s", host, user)
+	log.Printf("Attempting SSH connection")
 	
 	client, err := ssh.Dial("tcp", host, config)
 	
@@ -558,7 +559,10 @@ type GitHubAuthStatus struct {
 
 // InitiateGitHubAuth starts the GitHub OAuth flow
 func (a *App) InitiateGitHubAuth() error {
-	oauthService := NewGitHubOAuthService(a.ctx)
+	oauthService, err := NewGitHubOAuthService(a.ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create OAuth service: %w", err)
+	}
 	
 	authURL, err := oauthService.InitiateOAuth()
 	if err != nil {
@@ -597,7 +601,13 @@ func (a *App) InitiateGitHubAuth() error {
 
 // GetGitHubAuthStatus checks the current GitHub authentication status
 func (a *App) GetGitHubAuthStatus() GitHubAuthStatus {
-	oauthService := NewGitHubOAuthService(a.ctx)
+	oauthService, err := NewGitHubOAuthService(a.ctx)
+	if err != nil {
+		return GitHubAuthStatus{
+			IsAuthenticated: false,
+			Error:           fmt.Sprintf("OAuth service error: %v", err),
+		}
+	}
 	
 	tokenInfo, err := oauthService.LoadToken()
 	if err != nil {
@@ -625,9 +635,12 @@ func (a *App) GetGitHubAuthStatus() GitHubAuthStatus {
 
 // DisconnectGitHub revokes and removes stored GitHub authentication
 func (a *App) DisconnectGitHub() error {
-	oauthService := NewGitHubOAuthService(a.ctx)
+	oauthService, err := NewGitHubOAuthService(a.ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create OAuth service: %w", err)
+	}
 	
-	err := oauthService.DeleteToken()
+	err = oauthService.DeleteToken()
 	if err != nil {
 		return fmt.Errorf("failed to disconnect GitHub: %w", err)
 	}
@@ -638,7 +651,10 @@ func (a *App) DisconnectGitHub() error {
 
 // CreateBackupRepository creates a new GitHub repository for backups
 func (a *App) CreateBackupRepository(repoName string) error {
-	oauthService := NewGitHubOAuthService(a.ctx)
+	oauthService, err := NewGitHubOAuthService(a.ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create OAuth service: %w", err)
+	}
 	
 	tokenInfo, err := oauthService.LoadToken()
 	if err != nil {
@@ -651,8 +667,43 @@ func (a *App) CreateBackupRepository(repoName string) error {
 		return fmt.Errorf("GitHub authentication expired: %w", err)
 	}
 
-	// TODO: Implement repository creation using GitHub API
-	// This will require the github.com/google/go-github package
+	// Create repository using GitHub REST API
+	token := &oauth2.Token{
+		AccessToken: tokenInfo.AccessToken,
+		TokenType:   tokenInfo.TokenType,
+	}
+	if !tokenInfo.ExpiresAt.IsZero() {
+		token.Expiry = tokenInfo.ExpiresAt
+	}
+
+	client := oauthService.config.Client(context.Background(), token)
+
+	// Repository creation payload
+	repoData := map[string]interface{}{
+		"name":        repoName,
+		"description": "Dockerizathinginator backup repository",
+		"private":     true,
+		"auto_init":   true,
+	}
+
+	repoPayload, err := json.Marshal(repoData)
+	if err != nil {
+		return fmt.Errorf("failed to marshal repository data: %w", err)
+	}
+
+	// Create the repository
+	resp, err := client.Post("https://api.github.com/user/repos", "application/json", bytes.NewReader(repoPayload))
+	if err != nil {
+		return fmt.Errorf("failed to create repository: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 201 {
+		body, _ := json.NewDecoder(resp.Body).Decode(nil)
+		return fmt.Errorf("GitHub API error: %d - %v", resp.StatusCode, body)
+	}
+
+	// Emit success event
 	runtime.EventsEmit(a.ctx, "backupRepoCreated", map[string]interface{}{
 		"repo_name": repoName,
 		"username":  tokenInfo.Username,

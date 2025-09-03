@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/zalando/go-keyring"
@@ -39,15 +41,23 @@ type GitHubTokenInfo struct {
 }
 
 // NewGitHubOAuthService creates a new GitHub OAuth service
-func NewGitHubOAuthService(ctx context.Context) *GitHubOAuthService {
+func NewGitHubOAuthService(ctx context.Context) (*GitHubOAuthService, error) {
+	// Load OAuth credentials from environment variables
+	clientID := os.Getenv("GITHUB_CLIENT_ID")
+	clientSecret := os.Getenv("GITHUB_CLIENT_SECRET")
+	
+	if clientID == "" || clientSecret == "" {
+		return nil, fmt.Errorf("GitHub OAuth credentials not configured. Please set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET environment variables")
+	}
+
 	// Generate secure random state
 	stateBytes := make([]byte, 32)
 	rand.Read(stateBytes)
 	state := hex.EncodeToString(stateBytes)
 
 	config := &oauth2.Config{
-		ClientID:     "your-client-id", // Will be set from environment or config
-		ClientSecret: "your-client-secret", // Will be set from environment or config
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
 		RedirectURL:  "http://localhost:8080/callback",
 		Scopes:       []string{"repo", "user:email"},
 		Endpoint:     github.Endpoint,
@@ -58,7 +68,7 @@ func NewGitHubOAuthService(ctx context.Context) *GitHubOAuthService {
 		state:     state,
 		tokenChan: make(chan *oauth2.Token, 1),
 		ctx:       ctx,
-	}
+	}, nil
 }
 
 // InitiateOAuth starts the OAuth flow
@@ -214,10 +224,36 @@ func (g *GitHubOAuthService) GetUserInfo(token *oauth2.Token) (*GitHubTokenInfo,
 		}
 	}
 
+	// Get OAuth app info to retrieve granted scopes
+	var grantedScopes string
+	appResp, err := client.Get("https://api.github.com/applications/grants")
+	if err == nil {
+		defer appResp.Body.Close()
+		var grants []struct {
+			Scopes []string `json:"scopes"`
+			App    struct {
+				ClientID string `json:"client_id"`
+			} `json:"app"`
+		}
+		if json.NewDecoder(appResp.Body).Decode(&grants) == nil {
+			for _, grant := range grants {
+				if grant.App.ClientID == g.config.ClientID {
+					grantedScopes = strings.Join(grant.Scopes, ",")
+					break
+				}
+			}
+		}
+	}
+
+	// If we couldn't get scopes from grants, use the configured scopes as fallback
+	if grantedScopes == "" {
+		grantedScopes = strings.Join(g.config.Scopes, ",")
+	}
+
 	tokenInfo := &GitHubTokenInfo{
 		AccessToken: token.AccessToken,
 		TokenType:   token.TokenType,
-		Scope:       "", // OAuth2 library doesn't expose scope directly
+		Scope:       grantedScopes,
 		Username:    user.Login,
 		Email:       user.Email,
 	}
