@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -108,10 +107,18 @@ func (a *App) TestSSH(host, user, password string) ConnectionResult {
 		}))
 	}
 
+	hostKeyCallback, hkErr := SecureHostKeyCallback()
+	if hkErr != nil {
+		return ConnectionResult{
+			Success: false,
+			Message: fmt.Sprintf("Failed to load trusted host key: %v", hkErr),
+		}
+	}
+
 	config := &ssh.ClientConfig{
 		User:            user,
 		Auth:            authMethods,
-		HostKeyCallback: createHostKeyCallback(),
+		HostKeyCallback: hostKeyCallback,
 		Timeout:         10 * time.Second, // Increased timeout for better reliability
 		ClientVersion:   "SSH-2.0-Dockerizathinginator",
 		// Add cipher and kex configurations for better compatibility
@@ -700,8 +707,9 @@ func (a *App) CreateBackupRepository(repoName string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 201 {
-		body, _ := json.NewDecoder(resp.Body).Decode(nil)
-		return fmt.Errorf("GitHub API error: %d - %v", resp.StatusCode, body)
+		var errorResponse map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&errorResponse)
+		return fmt.Errorf("GitHub API error: %d - %v", resp.StatusCode, errorResponse)
 	}
 
 	// Emit success event
