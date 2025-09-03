@@ -62,7 +62,7 @@ type ConnectionResult struct {
 // This is more secure than InsecureIgnoreHostKey() while still being practical for Raspberry Pi setups
 func createHostKeyCallback() ssh.HostKeyCallback {
 	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
-		// Log the key for security awareness - admins can monitor these logs
+		// Log key type and fingerprint for security awareness
 		keyType := key.Type()
 		fingerprint := ssh.FingerprintSHA256(key)
 		log.Printf("SSH: Accepting %s key with fingerprint %s", keyType, fingerprint)
