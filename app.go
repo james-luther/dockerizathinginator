@@ -58,24 +58,18 @@ type ConnectionResult struct {
 	Model   string `json:"model,omitempty"`
 }
 
-// createHostKeyCallback creates a host key callback that accepts keys but logs them for security awareness
-// This is more secure than InsecureIgnoreHostKey() while still being practical for Raspberry Pi setups
-func createHostKeyCallback() ssh.HostKeyCallback {
-	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
-		// Log the key for security awareness - admins can monitor these logs
-		keyType := key.Type()
-		fingerprint := ssh.FingerprintSHA256(key)
-		log.Printf("SSH: Accepting %s key with fingerprint %s", keyType, fingerprint)
-		
-		// For production use, consider implementing:
-		// 1. Key pinning for known hosts
-		// 2. First-time connection confirmation prompts
-		// 3. Persistent key storage and verification
-		// 4. TOFU (Trust On First Use) mechanism
-		
-		// Accept the key (this replaces InsecureIgnoreHostKey behavior)
-		return nil
+// SecureHostKeyCallback returns a HostKeyCallback that verifies the server key using ssh.FixedHostKey.
+// The trusted host public key is loaded from a local file.
+func SecureHostKeyCallback() (ssh.HostKeyCallback, error) {
+	publicKeyBytes, err := os.ReadFile("allowed_hostkey.pub")
+	if err != nil {
+		return nil, fmt.Errorf("failed to read allowed_hostkey.pub: %w", err)
 	}
+	publicKey, err := ssh.ParsePublicKey(publicKeyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse allowed_hostkey.pub: %w", err)
+	}
+	return ssh.FixedHostKey(publicKey), nil
 }
 
 // TestSSH tests SSH connection to the Raspberry Pi
@@ -156,11 +150,18 @@ func (a *App) TestSSH(host, user, password string) ConnectionResult {
 	// If the advanced config fails, try a simpler configuration
 	if err != nil && strings.Contains(err.Error(), "message type") {
 		log.Printf("Advanced SSH config failed, trying simple config: %v", err)
+		hostKeyCallback, hkErr := SecureHostKeyCallback()
+		if hkErr != nil {
+			return ConnectionResult{
+				Success: false,
+				Message: fmt.Sprintf("Failed to load trusted host key: %v", hkErr),
+			}
+		}
 		
 		simpleConfig := &ssh.ClientConfig{
 			User:            user,
 			Auth:            authMethods,
-			HostKeyCallback: createHostKeyCallback(),
+			HostKeyCallback: hostKeyCallback,
 			Timeout:         10 * time.Second,
 		}
 		
