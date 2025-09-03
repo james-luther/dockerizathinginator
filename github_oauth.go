@@ -45,9 +45,28 @@ func NewGitHubOAuthService(ctx context.Context) (*GitHubOAuthService, error) {
 	// Load OAuth credentials from environment variables
 	clientID := os.Getenv("GITHUB_CLIENT_ID")
 	clientSecret := os.Getenv("GITHUB_CLIENT_SECRET")
+	redirectURL := os.Getenv("GITHUB_REDIRECT_URL")
+	scopes := os.Getenv("GITHUB_SCOPES")
 	
 	if clientID == "" || clientSecret == "" {
 		return nil, fmt.Errorf("GitHub OAuth credentials not configured. Please set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET environment variables")
+	}
+	
+	// Use default redirect URL if not specified
+	if redirectURL == "" {
+		redirectURL = "http://localhost:8080/callback"
+	}
+	
+	// Use default scopes if not specified
+	var scopeList []string
+	if scopes == "" {
+		scopeList = []string{"repo", "user:email"}
+	} else {
+		scopeList = strings.Split(scopes, ",")
+		// Trim whitespace from each scope
+		for i, scope := range scopeList {
+			scopeList[i] = strings.TrimSpace(scope)
+		}
 	}
 
 	// Generate secure random state
@@ -58,8 +77,8 @@ func NewGitHubOAuthService(ctx context.Context) (*GitHubOAuthService, error) {
 	config := &oauth2.Config{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
-		RedirectURL:  "http://localhost:8080/callback",
-		Scopes:       []string{"repo", "user:email"},
+		RedirectURL:  redirectURL,
+		Scopes:       scopeList,
 		Endpoint:     github.Endpoint,
 	}
 
