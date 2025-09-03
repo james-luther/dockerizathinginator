@@ -337,18 +337,18 @@
       
       <!-- GitHub Authentication Status Card -->
       <div id="githubAuthCard" class="glass-card p-6 mb-6">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center">
-            <div class="w-10 h-10 bg-ctp-green rounded-lg flex items-center justify-center mr-3">
+        <div class="flex items-center justify-between gap-4">
+          <div class="flex items-center flex-1">
+            <div class="w-10 h-10 bg-ctp-green rounded-lg flex items-center justify-center mr-4">
               <i class="fab fa-github text-ctp-base text-lg"></i>
             </div>
-            <div>
-              <h3 class="text-lg font-semibold text-ctp-text" id="authStatusTitle">Connect to GitHub</h3>
+            <div class="flex-1">
+              <h3 class="text-lg font-semibold text-ctp-text mb-1" id="authStatusTitle">Connect to GitHub</h3>
               <p class="text-ctp-subtext1 text-sm" id="authStatusDesc">Authenticate with GitHub for secure backup</p>
             </div>
           </div>
-          <div id="authButtons">
-            <button id="connectGitHub" class="btn btn-primary">
+          <div id="authButtons" class="flex-shrink-0">
+            <button id="connectGitHub" class="btn btn-primary whitespace-nowrap">
               <i class="fab fa-github mr-2"></i>
               Connect GitHub
             </button>

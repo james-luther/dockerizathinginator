@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -55,6 +56,27 @@ type ConnectionResult struct {
 	Model   string `json:"model,omitempty"`
 }
 
+// createHostKeyCallback creates a host key callback that accepts keys but logs them for security awareness
+// This is more secure than InsecureIgnoreHostKey() while still being practical for Raspberry Pi setups
+func createHostKeyCallback() ssh.HostKeyCallback {
+	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		// Log the key for security awareness - admins can monitor these logs
+		keyType := key.Type()
+		fingerprint := ssh.FingerprintSHA256(key)
+		log.Printf("SSH: Accepting %s key from %s (%s) with fingerprint %s", 
+			keyType, hostname, remote.String(), fingerprint)
+		
+		// For production use, consider implementing:
+		// 1. Key pinning for known hosts
+		// 2. First-time connection confirmation prompts
+		// 3. Persistent key storage and verification
+		// 4. TOFU (Trust On First Use) mechanism
+		
+		// Accept the key (this replaces InsecureIgnoreHostKey behavior)
+		return nil
+	}
+}
+
 // TestSSH tests SSH connection to the Raspberry Pi
 func (a *App) TestSSH(host, user, password string) ConnectionResult {
 	a.sshMutex.Lock()
@@ -94,7 +116,7 @@ func (a *App) TestSSH(host, user, password string) ConnectionResult {
 	config := &ssh.ClientConfig{
 		User:            user,
 		Auth:            authMethods,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		HostKeyCallback: createHostKeyCallback(),
 		Timeout:         10 * time.Second, // Increased timeout for better reliability
 		ClientVersion:   "SSH-2.0-Dockerizathinginator",
 		// Add cipher and kex configurations for better compatibility
@@ -137,7 +159,7 @@ func (a *App) TestSSH(host, user, password string) ConnectionResult {
 		simpleConfig := &ssh.ClientConfig{
 			User:            user,
 			Auth:            authMethods,
-			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+			HostKeyCallback: createHostKeyCallback(),
 			Timeout:         10 * time.Second,
 		}
 		

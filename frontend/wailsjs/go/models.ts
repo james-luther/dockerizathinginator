@@ -16,6 +16,24 @@ export namespace main {
 	        this.model = source["model"];
 	    }
 	}
+	export class GitHubAuthStatus {
+	    is_authenticated: boolean;
+	    username?: string;
+	    email?: string;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new GitHubAuthStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.is_authenticated = source["is_authenticated"];
+	        this.username = source["username"];
+	        this.email = source["email"];
+	        this.error = source["error"];
+	    }
+	}
 	export class StackConfig {
 	    networkStack: boolean;
 	    iotStack: boolean;
