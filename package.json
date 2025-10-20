@@ -10,6 +10,6 @@
     "test:simple": "playwright test test-navigation.spec.js"
   },
   "devDependencies": {
-    "@playwright/test": "^1.40.0"
+    "@playwright/test": "^1.56.1"
   }
 }
