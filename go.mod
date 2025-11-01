@@ -1,11 +1,11 @@
 module dockerizathinginator
 
-go 1.23.0
+go 1.24.0
 
 require (
 	github.com/wailsapp/wails/v2 v2.10.2
 	github.com/zalando/go-keyring v0.2.6
-	golang.org/x/crypto v0.41.0
+	golang.org/x/crypto v0.43.0
 	golang.org/x/oauth2 v0.30.0
 )
 
@@ -35,7 +35,7 @@ require (
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/wailsapp/go-webview2 v1.0.19 // indirect
 	github.com/wailsapp/mimetype v1.4.1 // indirect
-	golang.org/x/net v0.43.0 // indirect
-	golang.org/x/sys v0.35.0 // indirect
-	golang.org/x/text v0.28.0 // indirect
+	golang.org/x/net v0.45.0 // indirect
+	golang.org/x/sys v0.37.0 // indirect
+	golang.org/x/text v0.30.0 // indirect
 )
